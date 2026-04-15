@@ -1,0 +1,25 @@
+'use client';
+
+import { useRouter } from 'next/navigation';
+import { CartProvider } from '../../../src/context/CartContext';
+import { PostPurchaseDiscountProvider } from '../../../src/context/PostPurchaseDiscountContext';
+import { Header } from '../../../src/components/Header';
+import { StoreMaterials } from '../../../src/views/materials/StoreMaterials';
+import { resolveRoute } from '../../../src/lib/navigateRoute';
+
+export function MagazinClient() {
+  const router = useRouter();
+
+  function onNavigate(page: string) {
+    router.push(resolveRoute(page));
+  }
+
+  return (
+    <CartProvider>
+      <PostPurchaseDiscountProvider>
+        <Header currentPage="store-materials" onNavigate={onNavigate} isAuthenticated={false} />
+        <StoreMaterials onNavigate={onNavigate} isAuthenticated={false} />
+      </PostPurchaseDiscountProvider>
+    </CartProvider>
+  );
+}
