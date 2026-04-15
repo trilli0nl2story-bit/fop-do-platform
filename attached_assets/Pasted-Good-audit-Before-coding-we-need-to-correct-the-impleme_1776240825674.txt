@@ -1,0 +1,66 @@
+Good audit. Before coding, we need to correct the implementation direction.
+
+IMPORTANT:
+Do not start with Express auth on top of the current Vite SPA yet.
+
+Reason:
+Yandex SEO is a top business priority. The current app is a client-side Vite SPA with custom state routing, no real URLs, no SSR/SSG, and weak indexability. If we build backend/auth first on top of this structure, we will create rework later.
+
+We need an architecture lock first.
+
+TASK:
+Create a production architecture plan that preserves the current UI but moves the project toward SEO-ready, URL-based, backend-ready implementation.
+
+PRIMARY BUSINESS PRIORITY:
+Best possible Yandex indexing + high conversion.
+
+REQUIREMENTS:
+1. Public pages must have real URLs.
+2. Public pages must be indexable.
+3. Public pages should render meaningful HTML for crawlers.
+4. Dynamic store product pages must have SEO title, description, canonical, and schema.org.
+5. The visual UI from the current Bolt prototype must be preserved as much as possible.
+6. Do not redesign the interface.
+7. Do not remove current components.
+8. Do not implement auth yet.
+9. Do not implement payments yet.
+10. Do not implement database yet.
+11. First decide the correct app architecture.
+
+COMPARE THESE OPTIONS:
+
+Option A:
+Keep Vite + React, add react-router/wouter, add prerender/static generation for public pages, backend separately.
+
+Option B:
+Migrate to Next.js App Router, reuse existing React components, implement SSR/SSG for public pages, API routes/server actions later.
+
+Option C:
+Keep current Vite app for dashboard/private app, create separate SEO frontend for public pages.
+
+For each option, explain:
+- SEO quality for Yandex
+- migration risk
+- development speed
+- compatibility with existing components
+- compatibility with Replit
+- long-term maintainability
+- whether it supports product pages like /store/[slug]
+- whether it supports sitemap.xml and robots.txt cleanly
+- whether it avoids future rework
+
+Then recommend ONE option.
+
+After recommending, provide:
+
+1. Final architecture decision
+2. Folder structure
+3. Route map
+4. What existing files/components can be reused
+5. What needs to be moved or renamed
+6. What should NOT be touched yet
+7. First safe coding step after architecture is approved
+
+IMPORTANT:
+Do not make code changes.
+Only produce the architecture decision and migration plan.

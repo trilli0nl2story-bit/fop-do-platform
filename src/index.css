@@ -1,0 +1,9 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+@keyframes socialPop {
+  0%   { opacity: 0.4; transform: scale(0.92); }
+  50%  { opacity: 1;   transform: scale(1.06); }
+  100% { opacity: 1;   transform: scale(1); }
+}

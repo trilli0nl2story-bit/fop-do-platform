@@ -1,0 +1,103 @@
+You are a senior full-stack engineer and product architect.
+
+We are starting from an existing Bolt visual prototype for a Russian edtech platform called “Методический кабинет педагога”.
+
+IMPORTANT:
+Do not start coding immediately.
+Do not redesign the UI.
+Do not rebuild the product from scratch.
+First inspect the current project structure and produce an implementation plan.
+
+PROJECT GOAL:
+Turn the existing visual prototype into a production-ready MVP platform for preschool educators.
+
+The platform must support:
+- public SEO-friendly pages
+- mobile-first UX
+- user registration and login
+- free materials after registration
+- subscription materials after active subscription
+- store products with paid access
+- Prodamus payment integration
+- admin panel with real CRUD
+- Yandex SEO and analytics
+- protected file access
+- future PWA support
+
+AUDIENCE:
+- women 35–55
+- preschool teachers and ДОУ staff
+- mostly mobile users
+- low tolerance for complex interfaces
+- want to quickly understand, download and use materials
+
+CORE PRODUCT RULES:
+- preserve current visual style
+- mobile-first
+- one screen = one primary action
+- users can browse before registration
+- registration appears when needed: download, save, purchase, personal access
+- SEO for Yandex is a top priority
+- public pages must be indexable, not hidden behind app-only JavaScript
+- paid/free access decisions must be enforced on backend, not only frontend
+
+CURRENT VISUAL PROTOTYPE FEATURES TO PRESERVE:
+- landing page
+- materials hub with three sections:
+  - Бесплатно
+  - По подписке
+  - Магазин
+- category buttons from landing go directly to materials hub
+- free materials preview modal
+- registration gate for free downloads
+- subscription gate for subscription materials
+- store product cards and product detail pages
+- product card subscription upsell block
+- registration form with:
+  - name
+  - role
+  - city
+  - email
+  - password
+- profile page
+- referral program
+- subscription page
+- 6-month subscription plan visually highlighted as popular
+- AI assistant page in test mode
+- document request / author features marked as beta/manual/soon
+- payment visual states
+- admin prototype
+
+CURRENT STATE WARNING:
+The current Bolt version may contain localStorage/mock/prototype logic.
+Your job is to replace prototype logic with real backend/database logic later, but first inspect everything carefully.
+
+FIRST TASK:
+Perform a full project audit.
+
+Please inspect:
+1. project structure
+2. routing
+3. auth/prototype state
+4. materials data sources
+5. store product data sources
+6. admin panel structure
+7. payment state pages
+8. profile/referral logic
+9. assistant logic
+10. SEO limitations
+11. build/deployment setup
+
+Then return:
+
+1. Current tech stack detected
+2. Main files and what they do
+3. What is real vs what is mock/prototype
+4. What can be safely kept
+5. What must be replaced for production
+6. Recommended implementation phases
+7. First safe coding step
+8. Risks before coding
+
+DO NOT make code changes yet.
+Only audit and plan.

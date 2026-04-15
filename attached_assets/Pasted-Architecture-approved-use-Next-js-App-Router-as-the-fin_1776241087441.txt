@@ -1,0 +1,85 @@
+Architecture approved: use Next.js App Router as the final production architecture.
+
+IMPORTANT:
+Now perform ONLY the first safe coding step.
+Do NOT migrate the whole app yet.
+Do NOT redesign anything.
+Do NOT change visual styling.
+Do NOT change product logic.
+Do NOT implement auth.
+Do NOT implement database.
+Do NOT implement payments.
+Do NOT implement admin backend.
+Do NOT delete large parts of the existing app until the Next.js shell runs successfully.
+
+GOAL OF THIS STEP:
+Create a working Next.js App Router shell and render the existing Landing page at `/`, preserving the current visual design.
+
+TECH NOTE:
+Use the current stable Next.js version compatible with Replit. Do not hardcode Next.js 14 if a newer stable version is appropriate.
+
+TASKS:
+
+1. Install / configure Next.js
+- Add Next.js dependencies if missing.
+- Update package scripts so the project runs with Next.js.
+- Keep TypeScript and Tailwind working.
+- Preserve existing Tailwind configuration.
+
+2. Create App Router structure
+Create:
+- `app/layout.tsx`
+- `app/page.tsx`
+- `app/globals.css` if needed
+
+3. Move or reuse global CSS
+- Move current global CSS into `app/globals.css`
+- Do not change styling rules unless required for compatibility.
+
+4. Render existing Landing page
+- Reuse the existing Landing component.
+- Render it at `/`.
+- Do not redesign the Landing page.
+- If Landing currently depends on `onNavigate`, temporarily provide a safe stub function or minimal adapter.
+- Navigation does not need to be fully working yet.
+
+5. Providers
+If required for the Landing page to render, wrap the app with the existing providers:
+- CartProvider
+- PostPurchaseDiscountProvider
+
+Only include providers if necessary.
+
+6. Header/Footer
+If the Landing page currently expects them through App.tsx, reproduce the same visible result in the new layout or page.
+Do not redesign header/footer.
+
+7. Do NOT migrate these yet:
+- materials hub
+- store
+- product pages
+- registration
+- profile
+- admin
+- payment states
+- assistant
+- legal pages
+
+8. Verification
+After changes:
+- run the build
+- run the dev server check if possible
+- confirm `/` renders the Landing page
+- confirm no visual redesign was introduced
+- list changed files
+- list any temporary compatibility adapters added
+
+9. Safety
+If any step risks breaking the existing app, stop and explain before continuing.
+
+DELIVERABLE:
+A working Next.js shell with the current Landing page rendered at `/`, plus a short report:
+- changed files
+- what was preserved
+- what is temporary
+- next recommended migration step
