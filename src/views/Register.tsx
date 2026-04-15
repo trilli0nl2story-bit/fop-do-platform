@@ -17,6 +17,8 @@ const ROLES = [
   { value: 'head', label: 'Заведующая' },
 ];
 
+const SERVER_NOT_READY = 'Сервер авторизации ещё не настроен. Попробуйте позже.';
+
 export function Register({ onNavigate, onRegister, downloadContext }: RegisterProps) {
   const [name, setName] = useState('');
   const [email, setEmail] = useState('');
@@ -24,30 +26,68 @@ export function Register({ onNavigate, onRegister, downloadContext }: RegisterPr
   const [city, setCity] = useState('');
   const [selectedRole, setSelectedRole] = useState('');
   const [consentGiven, setConsentGiven] = useState(false);
+  const [loading, setLoading] = useState(false);
+  const [error, setError] = useState('');
 
   const canSubmit =
     name.trim().length > 0 &&
     email.trim().length > 0 &&
-    password.length >= 6 &&
+    password.length >= 8 &&
     city.trim().length > 0 &&
     selectedRole !== '' &&
-    consentGiven;
+    consentGiven &&
+    !loading;
 
-  const handleSubmit = (e: React.FormEvent) => {
+  const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!canSubmit) return;
+    setError('');
+    setLoading(true);
 
-    const existing = loadProfile();
-    saveProfile({
-      ...existing,
-      name: name.trim(),
-      email: email.trim(),
-      city: city.trim(),
-      role: ROLES.find(r => r.value === selectedRole)?.label ?? selectedRole,
-    });
+    const roleLabel = ROLES.find(r => r.value === selectedRole)?.label ?? selectedRole;
 
-    onRegister();
-    onNavigate('dashboard');
+    try {
+      const res = await fetch('/api/auth/register', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          name: name.trim(),
+          role: roleLabel,
+          city: city.trim(),
+          email: email.trim(),
+          password,
+        }),
+      });
+
+      const data = await res.json().catch(() => ({}));
+
+      if (!res.ok) {
+        if (res.status >= 500) {
+          setError(SERVER_NOT_READY);
+        } else {
+          setError(data.error ?? 'Не удалось создать аккаунт. Попробуйте позже.');
+        }
+        return;
+      }
+
+      // Keep localStorage profile as a compatibility cache for pages
+      // that still read from it (will be removed in a later migration step).
+      const existing = loadProfile();
+      saveProfile({
+        ...existing,
+        name: name.trim(),
+        email: email.trim(),
+        city: city.trim(),
+        role: roleLabel,
+      });
+
+      onRegister();
+      onNavigate('dashboard');
+    } catch {
+      setError('Не удалось подключиться к серверу. Проверьте интернет-соединение.');
+    } finally {
+      setLoading(false);
+    }
   };
 
   return (
@@ -83,7 +123,8 @@ export function Register({ onNavigate, onRegister, downloadContext }: RegisterPr
                 onChange={e => setName(e.target.value)}
                 placeholder="Например, Мария"
                 required
-                className="w-full px-3.5 py-2.5 border border-gray-300 rounded-xl text-sm focus:ring-2 focus:ring-blue-100 focus:border-blue-400 outline-none"
+                disabled={loading}
+                className="w-full px-3.5 py-2.5 border border-gray-300 rounded-xl text-sm focus:ring-2 focus:ring-blue-100 focus:border-blue-400 outline-none disabled:opacity-60"
               />
             </div>
 
@@ -94,12 +135,13 @@ export function Register({ onNavigate, onRegister, downloadContext }: RegisterPr
                   <button
                     key={role.value}
                     type="button"
+                    disabled={loading}
                     onClick={() => setSelectedRole(role.value)}
                     className={`inline-flex items-center gap-1.5 px-3.5 py-2 rounded-full border text-sm font-medium transition-all ${
                       selectedRole === role.value
                         ? 'border-blue-500 bg-blue-50 text-blue-700'
                         : 'border-gray-200 bg-white text-gray-600 hover:border-gray-300'
-                    }`}
+                    } disabled:opacity-60`}
                   >
                     {selectedRole === role.value && <Check className="w-3 h-3" />}
                     {role.label}
@@ -116,7 +158,8 @@ export function Register({ onNavigate, onRegister, downloadContext }: RegisterPr
                 onChange={e => setCity(e.target.value)}
                 placeholder="Например, Казань"
                 required
-                className="w-full px-3.5 py-2.5 border border-gray-300 rounded-xl text-sm focus:ring-2 focus:ring-blue-100 focus:border-blue-400 outline-none"
+                disabled={loading}
+                className="w-full px-3.5 py-2.5 border border-gray-300 rounded-xl text-sm focus:ring-2 focus:ring-blue-100 focus:border-blue-400 outline-none disabled:opacity-60"
               />
             </div>
 
@@ -128,7 +171,8 @@ export function Register({ onNavigate, onRegister, downloadContext }: RegisterPr
                 onChange={e => setEmail(e.target.value)}
                 placeholder="ваш@email.ru"
                 required
-                className="w-full px-3.5 py-2.5 border border-gray-300 rounded-xl text-sm focus:ring-2 focus:ring-blue-100 focus:border-blue-400 outline-none"
+                disabled={loading}
+                className="w-full px-3.5 py-2.5 border border-gray-300 rounded-xl text-sm focus:ring-2 focus:ring-blue-100 focus:border-blue-400 outline-none disabled:opacity-60"
               />
             </div>
 
@@ -138,9 +182,10 @@ export function Register({ onNavigate, onRegister, downloadContext }: RegisterPr
                 type="password"
                 value={password}
                 onChange={e => setPassword(e.target.value)}
-                placeholder="Минимум 6 символов"
+                placeholder="Минимум 8 символов"
                 required
-                className="w-full px-3.5 py-2.5 border border-gray-300 rounded-xl text-sm focus:ring-2 focus:ring-blue-100 focus:border-blue-400 outline-none"
+                disabled={loading}
+                className="w-full px-3.5 py-2.5 border border-gray-300 rounded-xl text-sm focus:ring-2 focus:ring-blue-100 focus:border-blue-400 outline-none disabled:opacity-60"
               />
             </div>
 
@@ -149,6 +194,12 @@ export function Register({ onNavigate, onRegister, downloadContext }: RegisterPr
               onChange={setConsentGiven}
               onNavigate={onNavigate}
             />
+
+            {error && (
+              <p className="text-sm text-red-600 bg-red-50 border border-red-100 rounded-xl px-4 py-3">
+                {error}
+              </p>
+            )}
 
             <button
               type="submit"
@@ -159,7 +210,7 @@ export function Register({ onNavigate, onRegister, downloadContext }: RegisterPr
                   : 'bg-gray-100 text-gray-400 cursor-not-allowed'
               }`}
             >
-              Создать кабинет
+              {loading ? 'Создание аккаунта...' : 'Создать кабинет'}
             </button>
           </form>
 

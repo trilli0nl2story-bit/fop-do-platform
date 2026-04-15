@@ -7,14 +7,44 @@ interface LoginProps {
   onLogin: () => void;
 }
 
+const SERVER_NOT_READY = 'Сервер авторизации ещё не настроен. Попробуйте позже.';
+
 export function Login({ onNavigate, onLogin }: LoginProps) {
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
+  const [loading, setLoading] = useState(false);
+  const [error, setError] = useState('');
 
-  const handleSubmit = (e: React.FormEvent) => {
+  const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    onLogin();
-    onNavigate('dashboard');
+    setError('');
+    setLoading(true);
+
+    try {
+      const res = await fetch('/api/auth/login', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ email: email.trim(), password }),
+      });
+
+      const data = await res.json().catch(() => ({}));
+
+      if (!res.ok) {
+        if (res.status >= 500) {
+          setError(SERVER_NOT_READY);
+        } else {
+          setError(data.error ?? 'Не удалось войти. Проверьте данные.');
+        }
+        return;
+      }
+
+      onLogin();
+      onNavigate('dashboard');
+    } catch {
+      setError('Не удалось подключиться к серверу. Проверьте интернет-соединение.');
+    } finally {
+      setLoading(false);
+    }
   };
 
   return (
@@ -34,6 +64,7 @@ export function Login({ onNavigate, onLogin }: LoginProps) {
               value={email}
               onChange={(e) => setEmail(e.target.value)}
               required
+              disabled={loading}
             />
             <Input
               type="password"
@@ -42,10 +73,17 @@ export function Login({ onNavigate, onLogin }: LoginProps) {
               value={password}
               onChange={(e) => setPassword(e.target.value)}
               required
+              disabled={loading}
             />
 
-            <Button type="submit" className="w-full" size="lg">
-              Войти
+            {error && (
+              <p className="text-sm text-red-600 bg-red-50 border border-red-100 rounded-xl px-4 py-3">
+                {error}
+              </p>
+            )}
+
+            <Button type="submit" className="w-full" size="lg" disabled={loading}>
+              {loading ? 'Вход...' : 'Войти'}
             </Button>
           </form>
 
