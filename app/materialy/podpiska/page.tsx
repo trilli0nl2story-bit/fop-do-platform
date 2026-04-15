@@ -5,6 +5,7 @@ export const metadata: Metadata = {
   title: 'Материалы по подписке для педагогов ДОУ',
   description:
     'Библиотека материалов по подписке: конспекты, КТП, игры, диагностика и документы для педагогов ДОУ.',
+  alternates: { canonical: '/materialy/podpiska' },
 };
 
 export default function PodpiskaPage() {
