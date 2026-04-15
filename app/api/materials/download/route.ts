@@ -2,6 +2,7 @@ import { NextResponse } from 'next/server';
 import { getCurrentUser } from '@/src/server/auth';
 import { query } from '@/src/server/db';
 import { checkMaterialAccess } from '@/src/server/materialAccess';
+import { getMaterialFile, createDownloadDescriptor } from '@/src/server/storage';
 
 export const dynamic = 'force-dynamic';
 
@@ -41,8 +42,9 @@ export async function POST(request: Request) {
     }
 
     const material = matResult.rows[0];
-    const access = await checkMaterialAccess(sessionUser.id, material.id, material.access_type);
 
+    // Access check — must pass before any file metadata is revealed
+    const access = await checkMaterialAccess(sessionUser.id, material.id, material.access_type);
     if (!access.allowed) {
       return NextResponse.json({
         ok: false,
@@ -50,6 +52,10 @@ export async function POST(request: Request) {
         message: access.message ?? 'Доступ к материалу ограничен.',
       }, { status: 403 });
     }
+
+    // Check whether a paid file has been registered in material_files
+    const paidFile = await getMaterialFile(material.id, 'paid');
+    const descriptor = createDownloadDescriptor(paidFile);
 
     return NextResponse.json({
       ok: true,
@@ -59,10 +65,7 @@ export async function POST(request: Request) {
         title: material.title,
         fileType: material.file_type ?? 'PDF',
       },
-      download: {
-        status: 'file_not_uploaded',
-        message: 'Файл скоро появится в личном кабинете. Доступ уже закреплён за вашим аккаунтом.',
-      },
+      download: descriptor,
     });
   } catch (err) {
     console.error('[api/materials/download]', err instanceof Error ? err.message : String(err));
