@@ -25,7 +25,7 @@ export async function POST(request: Request) {
       return NextResponse.json({ error: 'materialSlug is required' }, { status: 400 });
     }
 
-    // Never expose paid_file_url, preview_file_url, or storage_key
+    // Never select paid_file_url, preview_file_url, or storage_key here
     const matResult = await query<{
       id: string; slug: string; title: string;
       access_type: string; file_type: string | null;
@@ -43,7 +43,7 @@ export async function POST(request: Request) {
 
     const material = matResult.rows[0];
 
-    // Access check — must pass before any file metadata is revealed
+    // Access must be verified before any file metadata is revealed
     const access = await checkMaterialAccess(sessionUser.id, material.id, material.access_type);
     if (!access.allowed) {
       return NextResponse.json({
@@ -53,9 +53,9 @@ export async function POST(request: Request) {
       }, { status: 403 });
     }
 
-    // Check whether a paid file has been registered in material_files
+    // Look up the paid file and produce a descriptor (signed URL or placeholder)
     const paidFile = await getMaterialFile(material.id, 'paid');
-    const descriptor = createDownloadDescriptor(paidFile);
+    const descriptor = await createDownloadDescriptor(paidFile);
 
     return NextResponse.json({
       ok: true,

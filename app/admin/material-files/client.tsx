@@ -370,6 +370,10 @@ export function AdminMaterialFilesClient() {
                     disabled={regLoading}
                     className="w-full px-3.5 py-2.5 border border-gray-300 rounded-xl text-sm font-mono focus:ring-2 focus:ring-blue-100 focus:border-blue-400 outline-none disabled:opacity-60"
                   />
+                  <p className="text-xs text-gray-400 mt-1">
+                    Путь к файлу внутри бакета, например:{' '}
+                    <span className="font-mono">materials/paid/slug.pdf</span>
+                  </p>
                 </div>
                 <div>
                   <label className="block text-xs font-medium text-gray-600 mb-1">

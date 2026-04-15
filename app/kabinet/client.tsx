@@ -60,6 +60,7 @@ export function KabinetClient() {
   const [summaryError, setSummaryError] = useState('');
   const [dlStates, setDlStates] = useState<Record<string, 'idle' | 'loading' | 'ok' | 'denied' | 'error'>>({});
   const [dlMessages, setDlMessages] = useState<Record<string, string>>({});
+  const [dlUrls, setDlUrls] = useState<Record<string, string>>({});
 
   async function handleDownload(slug: string) {
     setDlStates(prev => ({ ...prev, [slug]: 'loading' }));
@@ -73,8 +74,13 @@ export function KabinetClient() {
       });
       const data = await res.json();
       if (res.ok && data.ok) {
+        const dl = data.download ?? {};
         setDlStates(prev => ({ ...prev, [slug]: 'ok' }));
-        setDlMessages(prev => ({ ...prev, [slug]: data.download?.message ?? 'Доступ подтверждён. Файл скоро появится в личном кабинете.' }));
+        setDlMessages(prev => ({ ...prev, [slug]: dl.message ?? 'Доступ подтверждён.' }));
+        if (dl.status === 'ready' && typeof dl.url === 'string' && dl.url) {
+          setDlUrls(prev => ({ ...prev, [slug]: dl.url }));
+          window.open(dl.url, '_blank', 'noopener,noreferrer');
+        }
       } else if (res.status === 403) {
         setDlStates(prev => ({ ...prev, [slug]: 'denied' }));
         setDlMessages(prev => ({ ...prev, [slug]: data.message ?? 'Доступ ограничен.' }));
@@ -294,7 +300,7 @@ export function KabinetClient() {
                         {ds === 'ok' ? (
                           <span className="inline-flex items-center gap-1 text-xs text-green-700 flex-shrink-0">
                             <CheckCircle2 className="w-3.5 h-3.5" />
-                            Доступ открыт
+                            {dlUrls[m.slug] ? 'Ссылка открыта ✓' : 'Доступ открыт'}
                           </span>
                         ) : (
                           <button

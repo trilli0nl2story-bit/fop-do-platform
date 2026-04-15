@@ -1,3 +1,5 @@
+import { S3Client, GetObjectCommand } from '@aws-sdk/client-s3';
+import { getSignedUrl } from '@aws-sdk/s3-request-presigner';
 import { query } from './db';
 
 // ── Types ─────────────────────────────────────────────────────────────────────
@@ -13,17 +15,34 @@ export interface MaterialStorageFile {
   createdAt: string;
 }
 
-export interface DownloadDescriptor {
-  status: 'file_not_uploaded' | 'storage_not_configured';
-  message: string;
+export type DownloadDescriptor =
+  | { status: 'file_not_uploaded'; message: string }
+  | { status: 'storage_not_configured'; message: string }
+  | { status: 'ready'; url: string; expiresInSeconds: number; fileSize: number | null; message: string };
+
+// ── S3 configuration ──────────────────────────────────────────────────────────
+
+function getS3Env() {
+  return {
+    endpoint: process.env.S3_ENDPOINT ?? '',
+    region: process.env.S3_REGION ?? '',
+    bucket: process.env.S3_BUCKET ?? '',
+    accessKeyId: process.env.S3_ACCESS_KEY_ID ?? '',
+    secretAccessKey: process.env.S3_SECRET_ACCESS_KEY ?? '',
+    forcePathStyle: process.env.S3_FORCE_PATH_STYLE !== 'false',
+    ttl: Math.max(30, parseInt(process.env.S3_SIGNED_URL_TTL_SECONDS ?? '300', 10) || 300),
+  };
+}
+
+export function isStorageConfigured(): boolean {
+  const e = getS3Env();
+  return !!(e.endpoint && e.region && e.bucket && e.accessKeyId && e.secretAccessKey);
 }
 
 // ── Queries ───────────────────────────────────────────────────────────────────
 
 /**
- * Returns the first material_files row for the given role, or null if none exists.
- * Never returns storageKey to callers outside this module — callers may choose
- * to include or exclude it depending on their context (admin vs end-user).
+ * Returns the most recent material_files row for the given role, or null.
  */
 export async function getMaterialFile(
   materialId: string,
@@ -53,8 +72,7 @@ export async function getMaterialFile(
 }
 
 /**
- * Inserts a material_files row and returns the created record.
- * Does NOT upload anything to storage — only registers the metadata.
+ * Inserts a material_files metadata row. Does NOT upload the file.
  */
 export async function registerMaterialFile(params: {
   materialId: string;
@@ -82,23 +100,60 @@ export async function registerMaterialFile(params: {
   };
 }
 
+// ── Signed URL generation ─────────────────────────────────────────────────────
+
 /**
- * Produces a safe placeholder descriptor — never generates a real signed URL.
- * When a real storage provider is connected, this function will be updated to
- * return a short-lived signed URL instead.
+ * Returns a DownloadDescriptor for the end-user:
+ *   - file_not_uploaded  : no material_files row yet
+ *   - storage_not_configured : row exists but env vars absent or signing failed
+ *   - ready              : short-lived signed GET URL generated successfully
+ *
+ * Never exposes storageKey, bucket name, or credentials to callers.
  */
-export function createDownloadDescriptor(file: MaterialStorageFile | null): DownloadDescriptor {
+export async function createDownloadDescriptor(
+  file: MaterialStorageFile | null
+): Promise<DownloadDescriptor> {
   if (!file) {
     return {
       status: 'file_not_uploaded',
       message: 'Файл скоро появится в личном кабинете. Доступ уже закреплён за вашим аккаунтом.',
     };
   }
-  // File is registered but no storage provider is connected yet
-  return {
-    status: 'storage_not_configured',
-    message: 'Файл закреплён за материалом, но хранилище ещё не подключено.',
-  };
+
+  if (!isStorageConfigured()) {
+    return {
+      status: 'storage_not_configured',
+      message: 'Файл закреплён за материалом, но хранилище ещё не подключено.',
+    };
+  }
+
+  try {
+    const { endpoint, region, bucket, accessKeyId, secretAccessKey, forcePathStyle, ttl } = getS3Env();
+
+    const client = new S3Client({
+      endpoint,
+      region,
+      credentials: { accessKeyId, secretAccessKey },
+      forcePathStyle,
+    });
+
+    const command = new GetObjectCommand({ Bucket: bucket, Key: file.storageKey });
+    const url = await getSignedUrl(client, command, { expiresIn: ttl });
+
+    return {
+      status: 'ready',
+      url,
+      expiresInSeconds: ttl,
+      fileSize: file.fileSize,
+      message: 'Файл готов к скачиванию. Ссылка действует ограниченное время.',
+    };
+  } catch (err) {
+    console.error('[storage] URL signing failed:', err instanceof Error ? err.message : 'unknown error');
+    return {
+      status: 'storage_not_configured',
+      message: 'Не удалось подготовить ссылку для скачивания. Попробуйте позже.',
+    };
+  }
 }
 
 // ── Validation ────────────────────────────────────────────────────────────────
