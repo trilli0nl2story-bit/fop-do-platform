@@ -11,6 +11,7 @@ export async function GET() {
     );
   }
 
+  // ping() logs error class + message to server console if it fails.
   const reachable = await ping();
 
   if (reachable) {
