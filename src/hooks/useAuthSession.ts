@@ -3,10 +3,9 @@
 import { useState, useEffect, useCallback } from 'react';
 
 export interface AuthUser {
-  sub: number;
+  id: string;
   email: string;
-  name?: string;
-  isAdmin?: boolean;
+  isAdmin: boolean;
 }
 
 export interface AuthSession {
