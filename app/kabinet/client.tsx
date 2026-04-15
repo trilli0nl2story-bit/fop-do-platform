@@ -399,6 +399,21 @@ export function KabinetClient() {
           </div>
         </div>
 
+        {/* Admin block — visible only to admins */}
+        {summary?.user?.isAdmin && (
+          <div className="bg-white rounded-2xl border border-amber-200 shadow-sm p-5">
+            <p className="text-xs font-semibold text-amber-600 uppercase tracking-wide mb-3">Администрирование</p>
+            <div className="flex flex-wrap gap-2">
+              <Link
+                href="/admin/material-files"
+                className="inline-flex items-center gap-1.5 px-4 py-2 bg-amber-500 hover:bg-amber-600 text-white text-sm font-medium rounded-xl transition-colors"
+              >
+                Файлы материалов
+              </Link>
+            </div>
+          </div>
+        )}
+
       </div>
     </div>
   );
