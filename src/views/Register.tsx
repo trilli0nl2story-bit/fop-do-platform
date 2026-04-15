@@ -124,6 +124,7 @@ export function Register({ onNavigate, onRegister, downloadContext }: RegisterPr
                 placeholder="Например, Мария"
                 required
                 disabled={loading}
+                autoComplete="given-name"
                 className="w-full px-3.5 py-2.5 border border-gray-300 rounded-xl text-sm focus:ring-2 focus:ring-blue-100 focus:border-blue-400 outline-none disabled:opacity-60"
               />
             </div>
@@ -172,6 +173,7 @@ export function Register({ onNavigate, onRegister, downloadContext }: RegisterPr
                 placeholder="ваш@email.ru"
                 required
                 disabled={loading}
+                autoComplete="email"
                 className="w-full px-3.5 py-2.5 border border-gray-300 rounded-xl text-sm focus:ring-2 focus:ring-blue-100 focus:border-blue-400 outline-none disabled:opacity-60"
               />
             </div>
@@ -185,6 +187,7 @@ export function Register({ onNavigate, onRegister, downloadContext }: RegisterPr
                 placeholder="Минимум 8 символов"
                 required
                 disabled={loading}
+                autoComplete="new-password"
                 className="w-full px-3.5 py-2.5 border border-gray-300 rounded-xl text-sm focus:ring-2 focus:ring-blue-100 focus:border-blue-400 outline-none disabled:opacity-60"
               />
             </div>

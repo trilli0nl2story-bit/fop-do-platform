@@ -65,6 +65,7 @@ export function Login({ onNavigate, onLogin }: LoginProps) {
               onChange={(e) => setEmail(e.target.value)}
               required
               disabled={loading}
+              autoComplete="email"
             />
             <Input
               type="password"
@@ -74,6 +75,7 @@ export function Login({ onNavigate, onLogin }: LoginProps) {
               onChange={(e) => setPassword(e.target.value)}
               required
               disabled={loading}
+              autoComplete="current-password"
             />
 
             {error && (
