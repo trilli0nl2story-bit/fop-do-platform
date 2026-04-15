@@ -1,4 +1,4 @@
-import { S3Client, GetObjectCommand } from '@aws-sdk/client-s3';
+import { S3Client, GetObjectCommand, PutObjectCommand } from '@aws-sdk/client-s3';
 import { getSignedUrl } from '@aws-sdk/s3-request-presigner';
 import { query } from './db';
 
@@ -37,6 +37,16 @@ function getS3Env() {
 export function isStorageConfigured(): boolean {
   const e = getS3Env();
   return !!(e.endpoint && e.region && e.bucket && e.accessKeyId && e.secretAccessKey);
+}
+
+function createS3Client() {
+  const { endpoint, region, accessKeyId, secretAccessKey, forcePathStyle } = getS3Env();
+  return new S3Client({
+    endpoint,
+    region,
+    credentials: { accessKeyId, secretAccessKey },
+    forcePathStyle,
+  });
 }
 
 // ── Queries ───────────────────────────────────────────────────────────────────
@@ -100,6 +110,46 @@ export async function registerMaterialFile(params: {
   };
 }
 
+function sanitizePathPart(value: string): string {
+  return value
+    .trim()
+    .toLowerCase()
+    .replace(/[^a-z0-9._-]+/g, '-')
+    .replace(/-+/g, '-')
+    .replace(/^-+|-+$/g, '') || 'file';
+}
+
+export function createMaterialStorageKey(params: {
+  materialSlug: string;
+  fileRole: StorageFileRole;
+  originalFilename: string;
+}): string {
+  const safeSlug = sanitizePathPart(params.materialSlug);
+  const safeFilename = sanitizePathPart(params.originalFilename);
+  const timestamp = new Date().toISOString().replace(/\D/g, '').slice(0, 14);
+  return `materials/${params.fileRole}/${safeSlug}/${timestamp}-${safeFilename}`;
+}
+
+export async function uploadMaterialFile(params: {
+  storageKey: string;
+  body: Uint8Array;
+  contentType?: string;
+}): Promise<void> {
+  if (!isStorageConfigured()) {
+    throw new Error('Storage is not configured');
+  }
+
+  const { bucket } = getS3Env();
+  const command = new PutObjectCommand({
+    Bucket: bucket,
+    Key: params.storageKey,
+    Body: params.body,
+    ContentType: params.contentType || 'application/octet-stream',
+  });
+
+  await createS3Client().send(command);
+}
+
 // ── Signed URL generation ─────────────────────────────────────────────────────
 
 /**
@@ -128,17 +178,10 @@ export async function createDownloadDescriptor(
   }
 
   try {
-    const { endpoint, region, bucket, accessKeyId, secretAccessKey, forcePathStyle, ttl } = getS3Env();
-
-    const client = new S3Client({
-      endpoint,
-      region,
-      credentials: { accessKeyId, secretAccessKey },
-      forcePathStyle,
-    });
+    const { bucket, ttl } = getS3Env();
 
     const command = new GetObjectCommand({ Bucket: bucket, Key: file.storageKey });
-    const url = await getSignedUrl(client, command, { expiresIn: ttl });
+    const url = await getSignedUrl(createS3Client(), command, { expiresIn: ttl });
 
     return {
       status: 'ready',

@@ -2,7 +2,7 @@
 
 import { useState, useEffect } from 'react';
 import Link from 'next/link';
-import { Search, FilePlus, FileText, AlertCircle, CheckCircle2, User, ShieldAlert, Loader2 } from 'lucide-react';
+import { Search, FilePlus, FileText, AlertCircle, CheckCircle2, User, ShieldAlert, Loader2, Upload } from 'lucide-react';
 
 // ── Types ─────────────────────────────────────────────────────────────────────
 
@@ -64,6 +64,13 @@ export function AdminMaterialFilesClient() {
   const [material, setMaterial] = useState<MaterialInfo | null>(null);
   const [existingFiles, setExistingFiles] = useState<MaterialFileRow[]>([]);
 
+  // Upload form
+  const [uploadRole, setUploadRole] = useState<'paid' | 'preview' | 'cover'>('paid');
+  const [uploadFile, setUploadFile] = useState<File | null>(null);
+  const [uploadLoading, setUploadLoading] = useState(false);
+  const [uploadError, setUploadError] = useState('');
+  const [uploadSuccess, setUploadSuccess] = useState('');
+
   // Registration form
   const [regRole, setRegRole] = useState<'paid' | 'preview' | 'cover'>('paid');
   const [regKey, setRegKey] = useState('');
@@ -71,6 +78,17 @@ export function AdminMaterialFilesClient() {
   const [regLoading, setRegLoading] = useState(false);
   const [regError, setRegError] = useState('');
   const [regSuccess, setRegSuccess] = useState('');
+
+  async function refreshFiles(materialSlug: string) {
+    const refRes = await fetch(
+      `/api/admin/material-files?materialSlug=${encodeURIComponent(materialSlug)}`,
+      { credentials: 'include' }
+    );
+    if (refRes.ok) {
+      const refData = await refRes.json();
+      setExistingFiles(refData.files ?? []);
+    }
+  }
 
   // ── Auth check ──────────────────────────────────────────────────────────────
   useEffect(() => {
@@ -96,6 +114,9 @@ export function AdminMaterialFilesClient() {
     setLookupError('');
     setMaterial(null);
     setExistingFiles([]);
+    setUploadFile(null);
+    setUploadError('');
+    setUploadSuccess('');
     setRegError('');
     setRegSuccess('');
     try {
@@ -149,15 +170,7 @@ export function AdminMaterialFilesClient() {
         setRegSuccess(`Файл зарегистрирован (id: ${data.file?.id ?? '?'})`);
         setRegKey('');
         setRegSize('');
-        // Refresh the files list
-        const refRes = await fetch(
-          `/api/admin/material-files?materialSlug=${encodeURIComponent(material.slug)}`,
-          { credentials: 'include' }
-        );
-        if (refRes.ok) {
-          const refData = await refRes.json();
-          setExistingFiles(refData.files ?? []);
-        }
+        await refreshFiles(material.slug);
       }
     } catch {
       setRegError('Сетевая ошибка. Попробуйте ещё раз.');
@@ -167,6 +180,38 @@ export function AdminMaterialFilesClient() {
   }
 
   // ── Render: loading ─────────────────────────────────────────────────────────
+  async function handleUpload(e: React.FormEvent) {
+    e.preventDefault();
+    if (!material || !uploadFile) return;
+    setUploadLoading(true);
+    setUploadError('');
+    setUploadSuccess('');
+    try {
+      const form = new FormData();
+      form.append('materialSlug', material.slug);
+      form.append('fileRole', uploadRole);
+      form.append('file', uploadFile);
+
+      const res = await fetch('/api/admin/material-files/upload', {
+        method: 'POST',
+        credentials: 'include',
+        body: form,
+      });
+      const data = await res.json();
+      if (!res.ok) {
+        setUploadError(data.message ?? data.error ?? `Ошибка ${res.status}`);
+      } else {
+        setUploadSuccess(`Файл загружен и подключён (id: ${data.file?.id ?? '?'})`);
+        setUploadFile(null);
+        await refreshFiles(material.slug);
+      }
+    } catch {
+      setUploadError('Сетевая ошибка. Попробуйте ещё раз.');
+    } finally {
+      setUploadLoading(false);
+    }
+  }
+
   if (loadState === 'loading') {
     return (
       <div className="min-h-screen bg-gray-50 flex items-center justify-center">
@@ -338,6 +383,62 @@ export function AdminMaterialFilesClient() {
                   ))}
                 </div>
               )}
+            </div>
+
+            {/* Upload form */}
+            <div className="rounded-2xl border border-blue-100 bg-blue-50/40 p-4">
+              <div className="flex items-center gap-2 mb-3">
+                <Upload className="w-4 h-4 text-blue-500" />
+                <p className="text-sm font-semibold text-gray-800">Загрузить файл и подключить к материалу</p>
+              </div>
+              <form onSubmit={handleUpload} className="space-y-3">
+                <div>
+                  <label className="block text-xs font-medium text-gray-600 mb-1">Роль файла</label>
+                  <select
+                    value={uploadRole}
+                    onChange={e => setUploadRole(e.target.value as 'paid' | 'preview' | 'cover')}
+                    disabled={uploadLoading}
+                    className="w-full px-3.5 py-2.5 border border-gray-300 rounded-xl text-sm focus:ring-2 focus:ring-blue-100 focus:border-blue-400 outline-none disabled:opacity-60 bg-white"
+                  >
+                    <option value="paid">paid - основной файл для скачивания</option>
+                    <option value="preview">preview - файл предпросмотра</option>
+                    <option value="cover">cover - обложка</option>
+                  </select>
+                </div>
+                <div>
+                  <label className="block text-xs font-medium text-gray-600 mb-1">Файл</label>
+                  <input
+                    key={uploadSuccess}
+                    type="file"
+                    onChange={e => setUploadFile(e.target.files?.[0] ?? null)}
+                    disabled={uploadLoading}
+                    className="block w-full text-sm text-gray-600 file:mr-3 file:rounded-lg file:border-0 file:bg-blue-500 file:px-4 file:py-2 file:text-sm file:font-semibold file:text-white hover:file:bg-blue-600 disabled:opacity-60"
+                  />
+                  <p className="text-xs text-gray-500 mt-1">
+                    Выберите PDF, DOCX, PPT или другой рабочий файл с компьютера. Storage Key сайт создаст сам.
+                  </p>
+                </div>
+                {uploadError && (
+                  <div className="flex items-center gap-2 text-sm text-red-600 bg-red-50 border border-red-100 rounded-xl px-4 py-3">
+                    <AlertCircle className="w-4 h-4 flex-shrink-0" />
+                    {uploadError}
+                  </div>
+                )}
+                {uploadSuccess && (
+                  <div className="flex items-center gap-2 text-sm text-green-700 bg-green-50 border border-green-100 rounded-xl px-4 py-3">
+                    <CheckCircle2 className="w-4 h-4 flex-shrink-0" />
+                    {uploadSuccess}
+                  </div>
+                )}
+                <button
+                  type="submit"
+                  disabled={uploadLoading || !uploadFile}
+                  className="inline-flex items-center gap-2 px-5 py-2.5 bg-blue-500 hover:bg-blue-600 text-white text-sm font-medium rounded-xl transition-colors disabled:opacity-50"
+                >
+                  {uploadLoading ? <Loader2 className="w-4 h-4 animate-spin" /> : <Upload className="w-4 h-4" />}
+                  {uploadLoading ? 'Загрузка...' : 'Загрузить и подключить'}
+                </button>
+              </form>
             </div>
 
             {/* Registration form */}
