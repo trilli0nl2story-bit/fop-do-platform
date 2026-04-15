@@ -45,8 +45,13 @@ export async function GET() {
       const isActive = s.status === 'active' &&
         s.current_period_end !== null &&
         new Date(s.current_period_end) > new Date();
+      const status = isActive
+        ? 'active'
+        : s.status === 'active'
+          ? 'expired'
+          : s.status;
       subscription = {
-        status: isActive ? 'active' : s.status,
+        status,
         planCode: s.plan_code ?? null,
         currentPeriodEnd: s.current_period_end
           ? new Date(s.current_period_end).toISOString()
