@@ -11,7 +11,7 @@ interface MaterialPreviewModalProps {
   onConfirmDownload?: () => void;
 }
 
-const PREVIEW_CONTENT: Record<number, { whatsInside: string[]; howToUse: string[]; previewText: string }> = {};
+const PREVIEW_CONTENT: Record<string | number, { whatsInside: string[]; howToUse: string[]; previewText: string }> = {};
 
 function getPreviewData(doc: MaterialDoc) {
   if (PREVIEW_CONTENT[doc.id]) return PREVIEW_CONTENT[doc.id];

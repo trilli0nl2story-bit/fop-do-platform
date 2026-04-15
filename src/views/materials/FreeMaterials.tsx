@@ -1,7 +1,9 @@
-import { useState } from 'react';
+'use client';
+
+import { useState, useEffect } from 'react';
 import { Search, Gift } from 'lucide-react';
 import { Input } from '../../components/Input';
-import { MaterialDocCard } from '../../components/MaterialDocCard';
+import { MaterialDocCard, MaterialDoc } from '../../components/MaterialDocCard';
 import { getMergedFreeMaterials } from '../../lib/cmsProducts';
 
 interface FreeMaterialsProps {
@@ -11,16 +13,79 @@ interface FreeMaterialsProps {
 
 const CATEGORIES = ['Все категории', 'Методички', 'Шаблоны', 'Документация', 'Справочники'];
 
+function programColor(program: string): string {
+  return program.includes('ФОП') ? 'bg-teal-50 text-teal-700' : 'bg-gray-100 text-gray-600';
+}
+
+function normalizeFileType(ft: string): 'PDF' | 'DOCX' | 'PPT' {
+  const u = ft.toUpperCase();
+  if (u === 'DOCX') return 'DOCX';
+  if (u === 'PPT' || u === 'PPTX') return 'PPT';
+  return 'PDF';
+}
+
+type GrantStatus = 'idle' | 'loading' | 'granted' | 'error';
+
 export function FreeMaterials({ onNavigate, isAuthenticated = false }: FreeMaterialsProps) {
   const [search, setSearch] = useState('');
   const [category, setCategory] = useState('Все категории');
+  const [apiMaterials, setApiMaterials] = useState<MaterialDoc[] | null>(null);
+  const [grantStates, setGrantStates] = useState<Record<string, GrantStatus>>({});
 
-  const allFree = getMergedFreeMaterials();
+  // Try to load free materials from the API; fall back to local data on error
+  useEffect(() => {
+    fetch('/api/materials/free')
+      .then(r => r.ok ? r.json() : Promise.reject(r.status))
+      .then(data => {
+        const items: MaterialDoc[] = (data.items ?? []).map((r: {
+          id: string; slug: string; title: string;
+          shortDescription: string; categoryName: string;
+          ageGroup: string; fileType: string; program: string;
+        }) => ({
+          id: r.id,
+          slug: r.slug,
+          title: r.title,
+          category: r.categoryName || 'Методички',
+          ageGroup: r.ageGroup || '3–7 лет',
+          description: r.shortDescription || '',
+          fileType: normalizeFileType(r.fileType),
+          program: r.program || 'ФОП ДО',
+          programColor: programColor(r.program || ''),
+          accessType: 'free' as const,
+        }));
+        setApiMaterials(items.length > 0 ? items : null);
+      })
+      .catch(() => {
+        // Fall back to local data silently
+        setApiMaterials(null);
+      });
+  }, []);
+
+  const allFree: MaterialDoc[] = apiMaterials ?? getMergedFreeMaterials();
+
   const filtered = allFree.filter(doc => {
-    const matchesSearch = !search || doc.title.toLowerCase().includes(search.toLowerCase()) || doc.description.toLowerCase().includes(search.toLowerCase());
+    const matchesSearch = !search ||
+      doc.title.toLowerCase().includes(search.toLowerCase()) ||
+      doc.description.toLowerCase().includes(search.toLowerCase());
     const matchesCategory = category === 'Все категории' || doc.category === category;
     return matchesSearch && matchesCategory;
   });
+
+  async function handleGrant(slug: string) {
+    if (!slug) return;
+    setGrantStates(prev => ({ ...prev, [slug]: 'loading' }));
+    try {
+      const res = await fetch('/api/materials/free/grant', {
+        method: 'POST',
+        credentials: 'include',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ materialSlug: slug }),
+      });
+      setGrantStates(prev => ({ ...prev, [slug]: res.ok ? 'granted' : 'error' }));
+    } catch {
+      setGrantStates(prev => ({ ...prev, [slug]: 'error' }));
+    }
+  }
 
   return (
     <div className="max-w-4xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
@@ -75,14 +140,22 @@ export function FreeMaterials({ onNavigate, isAuthenticated = false }: FreeMater
         </div>
       ) : (
         <div className="space-y-4">
-          {filtered.map(doc => (
-            <MaterialDocCard
-              key={doc.id}
-              doc={doc}
-              onNavigate={onNavigate}
-              isAuthenticated={isAuthenticated}
-            />
-          ))}
+          {filtered.map(doc => {
+            const slug = doc.slug ?? String(doc.id);
+            const gs = grantStates[slug] ?? 'idle';
+            return (
+              <MaterialDocCard
+                key={doc.id}
+                doc={doc}
+                onNavigate={onNavigate}
+                isAuthenticated={isAuthenticated}
+                onGrantFree={isAuthenticated ? handleGrant : undefined}
+                grantLoading={gs === 'loading'}
+                grantedFree={gs === 'granted'}
+                grantError={gs === 'error'}
+              />
+            );
+          })}
         </div>
       )}
     </div>

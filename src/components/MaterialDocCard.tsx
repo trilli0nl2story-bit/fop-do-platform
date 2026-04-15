@@ -1,12 +1,14 @@
 import { useState } from 'react';
-import { FileText, Eye, ShoppingCart, Check, Lock, Download, CheckCircle2, TrendingUp } from 'lucide-react';
+import Link from 'next/link';
+import { FileText, Eye, ShoppingCart, Check, Lock, Download, CheckCircle2, TrendingUp, Loader2 } from 'lucide-react';
 import { Button } from './Button';
 import { MaterialPreviewModal } from './MaterialPreviewModal';
 
 export type AccessType = 'free' | 'subscription' | 'store';
 
 export interface MaterialDoc {
-  id: number;
+  id: string | number;
+  slug?: string;
   title: string;
   category: string;
   ageGroup: string;
@@ -40,6 +42,14 @@ interface MaterialDocCardProps {
   onAddToCart?: (doc: MaterialDoc) => void;
   onNavigate?: (page: string) => void;
   popularityLabel?: string | null;
+  /** Called when an authenticated user clicks "Скачать" on a free material. */
+  onGrantFree?: (slug: string) => void;
+  /** True while the grant request is in flight for this card. */
+  grantLoading?: boolean;
+  /** True after a successful grant for this card. */
+  grantedFree?: boolean;
+  /** True if the grant request failed for this card. */
+  grantError?: boolean;
 }
 
 export function MaterialDocCard({
@@ -50,6 +60,10 @@ export function MaterialDocCard({
   onAddToCart,
   onNavigate,
   popularityLabel,
+  onGrantFree,
+  grantLoading = false,
+  grantedFree = false,
+  grantError = false,
 }: MaterialDocCardProps) {
   const [modalMode, setModalMode] = useState<ModalMode | null>(null);
   const access = accessLabels[doc.accessType];
@@ -63,6 +77,8 @@ export function MaterialDocCard({
     if (doc.accessType === 'free') {
       if (!isAuthenticated) {
         setModalMode('download-gate');
+      } else if (onGrantFree && doc.slug) {
+        onGrantFree(doc.slug);
       } else {
         setModalMode('success');
       }
@@ -157,10 +173,31 @@ export function MaterialDocCard({
               )}
 
               {doc.accessType === 'free' && (
-                <Button size="sm" className="flex-1 sm:flex-none bg-green-500 hover:bg-green-600" onClick={handleDownloadClick}>
-                  <Download className="w-4 h-4" />
-                  Скачать
-                </Button>
+                grantedFree ? (
+                  <Button size="sm" className="flex-1 sm:flex-none bg-green-500 cursor-default" disabled>
+                    <CheckCircle2 className="w-4 h-4" />
+                    В кабинете
+                  </Button>
+                ) : (
+                  <Button
+                    size="sm"
+                    className="flex-1 sm:flex-none bg-green-500 hover:bg-green-600"
+                    onClick={handleDownloadClick}
+                    disabled={grantLoading}
+                  >
+                    {grantLoading ? (
+                      <>
+                        <Loader2 className="w-4 h-4 animate-spin" />
+                        Добавление...
+                      </>
+                    ) : (
+                      <>
+                        <Download className="w-4 h-4" />
+                        Скачать
+                      </>
+                    )}
+                  </Button>
+                )
               )}
 
               {doc.accessType === 'subscription' && !hasSubscription && (
@@ -201,6 +238,21 @@ export function MaterialDocCard({
                 </Button>
               )}
             </div>
+
+            {/* Grant result messages */}
+            {doc.accessType === 'free' && grantedFree && (
+              <p className="text-xs text-green-700 text-right">
+                Материал добавлен в{' '}
+                <Link href="/kabinet" className="underline font-medium">
+                  личный кабинет
+                </Link>
+              </p>
+            )}
+            {doc.accessType === 'free' && grantError && !grantedFree && (
+              <p className="text-xs text-red-500 text-right">
+                Не удалось добавить материал. Попробуйте ещё раз.
+              </p>
+            )}
           </div>
         </div>
       </div>
