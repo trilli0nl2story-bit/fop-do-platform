@@ -1,5 +1,22 @@
+-- =============================================================================
+-- ⚠️  LEGACY / SUPABASE-ONLY MIGRATION — DO NOT RUN ON PLAIN POSTGRESQL
+-- =============================================================================
+-- This migration was written for Supabase and depends on:
+--   • auth.users      — Supabase Auth managed table
+--   • auth.uid()      — Supabase Auth function (not available on plain PG)
+--   • authenticated   — Supabase-specific role
+--   • service_role    — Supabase-specific role
+--   • ENABLE ROW LEVEL SECURITY + CREATE POLICY using the above roles
+--
+-- For production deployment on Russian-hosted PostgreSQL (Timeweb, Selectel,
+-- Yandex Cloud, Neon, self-hosted) use the portable schema instead:
+--   db/migrations/0001_create_core_schema.sql
+--
+-- This file is kept as a reference and for Supabase prototype environments.
+-- =============================================================================
+
 /*
-  # Core Production Schema
+  # Core Schema (Supabase prototype)
 
   ## Summary
   Creates the main production tables for the Методический кабинет педагога platform.
@@ -7,13 +24,13 @@
   document requests, analytics, and admin audit log.
 
   ## Notes
-  - Builds on top of auth.users (Supabase Auth or any compatible provider).
+  - Builds on top of auth.users (Supabase Auth).
   - The `profiles` table with referral fields already exists (migration 20260408171803).
   - `author_applications` already exists (migration 20260308021000).
   - `young_specialist_questions` already exists (migration 20260309165003).
   - `post_purchase_discounts` already exists (migration 20260323230924).
   - This migration only creates NEW tables.
-  - All foreign keys to auth.users cascade on delete.
+  - All foreign keys reference auth.users cascade on delete.
   - RLS is enabled on every table; policies use auth.uid() or service role.
 */
 
