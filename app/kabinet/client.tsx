@@ -50,6 +50,13 @@ function formatDate(iso: string) {
   return new Date(iso).toLocaleDateString('ru-RU', { day: 'numeric', month: 'long', year: 'numeric' });
 }
 
+function materialHref(accessType: string, slug: string) {
+  if (accessType === 'store') return `/materialy/magazin/${slug}`;
+  if (accessType === 'subscription') return '/materialy/podpiska';
+  if (accessType === 'free') return '/materialy/besplatno';
+  return '/materialy';
+}
+
 export function KabinetClient() {
   const router = useRouter();
   const { user, isAuthenticated, loading, refresh } = useAuthSession();
@@ -253,7 +260,7 @@ export function KabinetClient() {
                 {mats.items.map(m => (
                   <li key={m.id}>
                     <Link
-                      href={`/materialy/magazin/${m.slug}`}
+                      href={materialHref(m.accessType, m.slug)}
                       className="text-sm text-blue-600 hover:text-blue-700 hover:underline line-clamp-2"
                     >
                       {m.title}
