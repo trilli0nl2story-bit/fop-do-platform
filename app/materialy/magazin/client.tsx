@@ -6,9 +6,11 @@ import { PostPurchaseDiscountProvider } from '../../../src/context/PostPurchaseD
 import { Header } from '../../../src/components/Header';
 import { StoreMaterials } from '../../../src/views/materials/StoreMaterials';
 import { resolveRoute } from '../../../src/lib/navigateRoute';
+import { useAuthSession } from '../../../src/hooks/useAuthSession';
 
 export function MagazinClient() {
   const router = useRouter();
+  const { isAuthenticated } = useAuthSession();
 
   function onNavigate(page: string) {
     router.push(resolveRoute(page));
@@ -17,8 +19,8 @@ export function MagazinClient() {
   return (
     <CartProvider>
       <PostPurchaseDiscountProvider>
-        <Header currentPage="store-materials" onNavigate={onNavigate} isAuthenticated={false} />
-        <StoreMaterials onNavigate={onNavigate} isAuthenticated={false} />
+        <Header currentPage="store-materials" onNavigate={onNavigate} isAuthenticated={isAuthenticated} />
+        <StoreMaterials onNavigate={onNavigate} isAuthenticated={isAuthenticated} />
       </PostPurchaseDiscountProvider>
     </CartProvider>
   );

@@ -6,6 +6,7 @@ import { CartProvider } from '../src/context/CartContext';
 import { PostPurchaseDiscountProvider } from '../src/context/PostPurchaseDiscountContext';
 import { Header } from '../src/components/Header';
 import { resolveRoute } from '../src/lib/navigateRoute';
+import { useAuthSession } from '../src/hooks/useAuthSession';
 
 const Landing = dynamic(
   () => import('../src/views/Landing').then((m) => ({ default: m.Landing })),
@@ -14,6 +15,7 @@ const Landing = dynamic(
 
 export default function HomePage() {
   const router = useRouter();
+  const { isAuthenticated } = useAuthSession();
 
   function onNavigate(page: string) {
     router.push(resolveRoute(page));
@@ -25,9 +27,9 @@ export default function HomePage() {
         <Header
           currentPage="landing"
           onNavigate={onNavigate}
-          isAuthenticated={false}
+          isAuthenticated={isAuthenticated}
         />
-        <Landing onNavigate={onNavigate} isAuthenticated={false} />
+        <Landing onNavigate={onNavigate} isAuthenticated={isAuthenticated} />
       </PostPurchaseDiscountProvider>
     </CartProvider>
   );
