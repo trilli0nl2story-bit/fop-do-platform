@@ -38,6 +38,20 @@ export default function sitemap(): MetadataRoute.Sitemap {
     },
   ];
 
+  const legalRoutes: MetadataRoute.Sitemap = [
+    'oferta',
+    'konfidentsialnost',
+    'usloviya',
+    'soglasie',
+    'vozvrat',
+    'avtory',
+  ].map((slug) => ({
+    url: `${siteUrl}/legal/${slug}`,
+    lastModified: now,
+    changeFrequency: 'yearly' as const,
+    priority: 0.4,
+  }));
+
   const productRoutes: MetadataRoute.Sitemap = storeProducts.map((p) => ({
     url: `${siteUrl}/materialy/magazin/${p.slug}`,
     lastModified: now,
@@ -45,5 +59,5 @@ export default function sitemap(): MetadataRoute.Sitemap {
     priority: 0.7,
   }));
 
-  return [...staticRoutes, ...productRoutes];
+  return [...staticRoutes, ...legalRoutes, ...productRoutes];
 }
