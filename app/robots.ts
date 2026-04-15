@@ -1,4 +1,5 @@
 import type { MetadataRoute } from 'next';
+import { siteUrl } from '../src/lib/siteConfig';
 
 export default function robots(): MetadataRoute.Robots {
   return {
@@ -13,6 +14,6 @@ export default function robots(): MetadataRoute.Robots {
         '/admin',
       ],
     },
-    sitemap: 'https://metodcab.replit.app/sitemap.xml',
+    sitemap: `${siteUrl}/sitemap.xml`,
   };
 }

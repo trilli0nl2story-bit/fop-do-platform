@@ -1,9 +1,10 @@
 import type { Metadata } from 'next';
+import { siteUrl, siteName } from '../src/lib/siteConfig';
 import './globals.css';
 
 export const metadata: Metadata = {
-  metadataBase: new URL('https://metodcab.replit.app'),
-  title: 'Методический кабинет педагога',
+  metadataBase: new URL(siteUrl),
+  title: siteName,
   description:
     'Готовые методические материалы для воспитателей и педагогов дошкольных учреждений — конспекты занятий, КТП, рабочие программы по ФОП ДО.',
   alternates: { canonical: '/' },
