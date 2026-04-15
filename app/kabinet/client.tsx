@@ -3,7 +3,7 @@
 import { useState, useEffect } from 'react';
 import { useRouter } from 'next/navigation';
 import Link from 'next/link';
-import { LogOut, BookOpen, Star, FileText, ShoppingBag, User, MapPin, Briefcase, Building } from 'lucide-react';
+import { LogOut, BookOpen, Star, FileText, ShoppingBag, User, MapPin, Briefcase, Building, Download, Loader2, CheckCircle2 } from 'lucide-react';
 import { useAuthSession } from '../../src/hooks/useAuthSession';
 
 interface AccountSummary {
@@ -50,13 +50,6 @@ function formatDate(iso: string) {
   return new Date(iso).toLocaleDateString('ru-RU', { day: 'numeric', month: 'long', year: 'numeric' });
 }
 
-function materialHref(accessType: string, slug: string) {
-  if (accessType === 'store') return `/materialy/magazin/${slug}`;
-  if (accessType === 'subscription') return '/materialy/podpiska';
-  if (accessType === 'free') return '/materialy/besplatno';
-  return '/materialy';
-}
-
 export function KabinetClient() {
   const router = useRouter();
   const { user, isAuthenticated, loading, refresh } = useAuthSession();
@@ -65,6 +58,35 @@ export function KabinetClient() {
   const [summary, setSummary] = useState<AccountSummary | null>(null);
   const [summaryLoading, setSummaryLoading] = useState(false);
   const [summaryError, setSummaryError] = useState('');
+  const [dlStates, setDlStates] = useState<Record<string, 'idle' | 'loading' | 'ok' | 'denied' | 'error'>>({});
+  const [dlMessages, setDlMessages] = useState<Record<string, string>>({});
+
+  async function handleDownload(slug: string) {
+    setDlStates(prev => ({ ...prev, [slug]: 'loading' }));
+    setDlMessages(prev => ({ ...prev, [slug]: '' }));
+    try {
+      const res = await fetch('/api/materials/download', {
+        method: 'POST',
+        credentials: 'include',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ materialSlug: slug }),
+      });
+      const data = await res.json();
+      if (res.ok && data.ok) {
+        setDlStates(prev => ({ ...prev, [slug]: 'ok' }));
+        setDlMessages(prev => ({ ...prev, [slug]: data.download?.message ?? 'Доступ подтверждён. Файл скоро появится в личном кабинете.' }));
+      } else if (res.status === 403) {
+        setDlStates(prev => ({ ...prev, [slug]: 'denied' }));
+        setDlMessages(prev => ({ ...prev, [slug]: data.message ?? 'Доступ ограничен.' }));
+      } else {
+        setDlStates(prev => ({ ...prev, [slug]: 'error' }));
+        setDlMessages(prev => ({ ...prev, [slug]: 'Не удалось открыть материал. Попробуйте ещё раз.' }));
+      }
+    } catch {
+      setDlStates(prev => ({ ...prev, [slug]: 'error' }));
+      setDlMessages(prev => ({ ...prev, [slug]: 'Не удалось открыть материал. Попробуйте ещё раз.' }));
+    }
+  }
 
   useEffect(() => {
     if (!isAuthenticated) return;
@@ -256,17 +278,46 @@ export function KabinetClient() {
             {summaryLoading ? (
               <p className="text-sm text-gray-400">Загрузка...</p>
             ) : mats && mats.total > 0 ? (
-              <ul className="space-y-1.5">
-                {mats.items.map(m => (
-                  <li key={m.id}>
-                    <Link
-                      href={materialHref(m.accessType, m.slug)}
-                      className="text-sm text-blue-600 hover:text-blue-700 hover:underline line-clamp-2"
-                    >
-                      {m.title}
-                    </Link>
-                  </li>
-                ))}
+              <ul className="space-y-3">
+                {mats.items.map(m => {
+                  const ds = dlStates[m.slug] ?? 'idle';
+                  const dm = dlMessages[m.slug] ?? '';
+                  return (
+                    <li key={m.id} className="space-y-1">
+                      <div className="flex items-start justify-between gap-2">
+                        <Link
+                          href={`/materialy/magazin/${m.slug}`}
+                          className="text-sm text-blue-600 hover:text-blue-700 hover:underline line-clamp-2 flex-1"
+                        >
+                          {m.title}
+                        </Link>
+                        {ds === 'ok' ? (
+                          <span className="inline-flex items-center gap-1 text-xs text-green-700 flex-shrink-0">
+                            <CheckCircle2 className="w-3.5 h-3.5" />
+                            Доступ открыт
+                          </span>
+                        ) : (
+                          <button
+                            onClick={() => handleDownload(m.slug)}
+                            disabled={ds === 'loading'}
+                            className="inline-flex items-center gap-1 text-xs font-medium text-gray-500 hover:text-blue-600 disabled:opacity-50 flex-shrink-0"
+                          >
+                            {ds === 'loading'
+                              ? <Loader2 className="w-3.5 h-3.5 animate-spin" />
+                              : <Download className="w-3.5 h-3.5" />
+                            }
+                            {ds === 'loading' ? 'Открытие...' : 'Скачать'}
+                          </button>
+                        )}
+                      </div>
+                      {dm && (
+                        <p className={`text-xs ${ds === 'ok' ? 'text-green-700' : 'text-red-500'}`}>
+                          {dm}
+                        </p>
+                      )}
+                    </li>
+                  );
+                })}
                 {mats.total > mats.items.length && (
                   <li className="text-xs text-gray-400 pt-1">
                     + ещё {mats.total - mats.items.length} материалов
