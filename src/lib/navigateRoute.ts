@@ -3,6 +3,10 @@
  */
 export function resolveRoute(page: string): string {
   if (page === 'landing') return '/';
+  if (page === 'login') return '/vhod';
+  if (page === 'register') return '/registratsiya';
+  // Dashboard not migrated yet — send to materials hub temporarily.
+  if (page === 'dashboard') return '/materialy';
   if (page === 'materials-hub' || page.startsWith('materials-hub/')) return '/materialy';
   if (page === 'free-materials') return '/materialy/besplatno';
   if (page === 'subscription-materials') return '/materialy/podpiska';
