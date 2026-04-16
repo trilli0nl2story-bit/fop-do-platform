@@ -5,6 +5,7 @@ import {
   createMaterialStorageKey,
   isStorageConfigured,
   isValidFileRole,
+  registerMaterialFileBlob,
   registerMaterialFile,
   uploadMaterialFile,
 } from '@/src/server/storage';
@@ -40,16 +41,6 @@ export async function POST(request: Request) {
   try {
     const { error } = await requireAdmin();
     if (error) return error;
-
-    if (!isStorageConfigured()) {
-      return NextResponse.json(
-        {
-          error: 'storage_not_configured',
-          message: 'Хранилище файлов ещё не подключено. Добавьте S3-настройки в Replit Secrets и опубликуйте сайт.',
-        },
-        { status: 503 }
-      );
-    }
 
     let form: FormData;
     try {
@@ -93,20 +84,41 @@ export async function POST(request: Request) {
     });
 
     const body = new Uint8Array(await file.arrayBuffer());
-    await uploadMaterialFile({
-      storageKey,
-      body,
-      contentType: file.type || 'application/octet-stream',
-    });
 
-    const created = await registerMaterialFile({
-      materialId: material.id,
-      fileRole,
-      storageKey,
-      fileSize: file.size,
-    });
+    let created;
+    if (isStorageConfigured()) {
+      await uploadMaterialFile({
+        storageKey,
+        body,
+        contentType: file.type || 'application/octet-stream',
+      });
 
-    return NextResponse.json({ ok: true, file: created }, { status: 201 });
+      created = await registerMaterialFile({
+        materialId: material.id,
+        fileRole,
+        storageKey,
+        fileSize: file.size,
+      });
+    } else {
+      created = await registerMaterialFile({
+        materialId: material.id,
+        fileRole,
+        storageKey: `database/${storageKey}`,
+        fileSize: file.size,
+      });
+      await registerMaterialFileBlob({
+        materialFileId: created.id,
+        fileName: file.name,
+        contentType: file.type || 'application/octet-stream',
+        body,
+      });
+    }
+
+    return NextResponse.json({
+      ok: true,
+      storage: isStorageConfigured() ? 's3' : 'database',
+      file: created,
+    }, { status: 201 });
   } catch (err) {
     console.error('[api/admin/material-files/upload]', err instanceof Error ? err.message : String(err));
     return NextResponse.json(

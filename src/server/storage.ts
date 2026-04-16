@@ -20,6 +20,14 @@ export type DownloadDescriptor =
   | { status: 'storage_not_configured'; message: string }
   | { status: 'ready'; url: string; expiresInSeconds: number; fileSize: number | null; message: string };
 
+export interface MaterialFileBlob {
+  materialFileId: string;
+  fileName: string;
+  contentType: string;
+  data: Buffer;
+  createdAt: string;
+}
+
 // ── S3 configuration ──────────────────────────────────────────────────────────
 
 function getS3Env() {
@@ -150,6 +158,88 @@ export async function uploadMaterialFile(params: {
   await createS3Client().send(command);
 }
 
+async function ensureMaterialFileBlobsTable() {
+  await query(`
+    CREATE TABLE IF NOT EXISTS material_file_blobs (
+      material_file_id uuid PRIMARY KEY REFERENCES material_files(id) ON DELETE CASCADE,
+      file_name text NOT NULL DEFAULT 'material-file',
+      content_type text NOT NULL DEFAULT 'application/octet-stream',
+      data bytea NOT NULL,
+      created_at timestamptz NOT NULL DEFAULT now()
+    )
+  `);
+}
+
+export async function registerMaterialFileBlob(params: {
+  materialFileId: string;
+  fileName: string;
+  contentType?: string;
+  body: Uint8Array;
+}): Promise<void> {
+  await ensureMaterialFileBlobsTable();
+  await query(
+    `INSERT INTO material_file_blobs (material_file_id, file_name, content_type, data)
+     VALUES ($1, $2, $3, $4)
+     ON CONFLICT (material_file_id) DO UPDATE SET
+       file_name = EXCLUDED.file_name,
+       content_type = EXCLUDED.content_type,
+       data = EXCLUDED.data,
+       created_at = now()`,
+    [
+      params.materialFileId,
+      params.fileName || 'material-file',
+      params.contentType || 'application/octet-stream',
+      Buffer.from(params.body),
+    ]
+  );
+}
+
+export async function getMaterialFileBlobMeta(
+  materialFileId: string
+): Promise<{ fileName: string; contentType: string } | null> {
+  await ensureMaterialFileBlobsTable();
+  const res = await query<{ file_name: string; content_type: string }>(
+    `SELECT file_name, content_type
+     FROM material_file_blobs
+     WHERE material_file_id = $1
+     LIMIT 1`,
+    [materialFileId]
+  );
+  if (res.rows.length === 0) return null;
+  return {
+    fileName: res.rows[0].file_name,
+    contentType: res.rows[0].content_type,
+  };
+}
+
+export async function getMaterialFileBlob(
+  materialFileId: string
+): Promise<MaterialFileBlob | null> {
+  await ensureMaterialFileBlobsTable();
+  const res = await query<{
+    material_file_id: string;
+    file_name: string;
+    content_type: string;
+    data: Buffer;
+    created_at: string;
+  }>(
+    `SELECT material_file_id, file_name, content_type, data, created_at
+     FROM material_file_blobs
+     WHERE material_file_id = $1
+     LIMIT 1`,
+    [materialFileId]
+  );
+  if (res.rows.length === 0) return null;
+  const r = res.rows[0];
+  return {
+    materialFileId: r.material_file_id,
+    fileName: r.file_name,
+    contentType: r.content_type,
+    data: r.data,
+    createdAt: new Date(r.created_at).toISOString(),
+  };
+}
+
 // ── Signed URL generation ─────────────────────────────────────────────────────
 
 /**
@@ -167,6 +257,17 @@ export async function createDownloadDescriptor(
     return {
       status: 'file_not_uploaded',
       message: 'Файл скоро появится в личном кабинете. Доступ уже закреплён за вашим аккаунтом.',
+    };
+  }
+
+  const dbBlob = await getMaterialFileBlobMeta(file.id);
+  if (dbBlob) {
+    return {
+      status: 'ready',
+      url: `/api/materials/download/file?fileId=${encodeURIComponent(file.id)}`,
+      expiresInSeconds: 0,
+      fileSize: file.fileSize,
+      message: 'Файл готов к скачиванию.',
     };
   }
 

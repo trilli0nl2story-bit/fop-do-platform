@@ -59,7 +59,7 @@ function getPool(): Pool {
  */
 export async function query<T extends QueryResultRow = Record<string, unknown>>(
   text: string,
-  params?: (string | number | boolean | null)[]
+  params?: unknown[]
 ): Promise<{ rows: T[]; rowCount: number }> {
   const client = getPool();
   const result = await client.query<T>(text, params);
