@@ -7,8 +7,10 @@ import {
   FilePlus,
   FileText,
   Loader2,
+  PlusCircle,
   Search,
   Upload,
+  X,
 } from 'lucide-react';
 
 type AccessFilter = 'all' | 'store' | 'free' | 'subscription';
@@ -32,6 +34,7 @@ interface MaterialInfo {
   shortDescription: string;
   fullDescription: string;
   accessType: string;
+  categoryId: string | null;
   fileType: string | null;
   priceRubles: number;
   isPublished: boolean;
@@ -54,6 +57,7 @@ interface MaterialForm {
   shortDescription: string;
   fullDescription: string;
   accessType: 'free' | 'subscription' | 'store';
+  categoryId: string;
   fileType: 'PDF' | 'DOCX' | 'PPT' | 'PPTX';
   priceRubles: string;
   isPublished: boolean;
@@ -61,6 +65,12 @@ interface MaterialForm {
   seoTitle: string;
   seoDescription: string;
   program: string;
+}
+
+interface CategoryRow {
+  id: string;
+  slug: string;
+  name: string;
 }
 
 const accessLabels: Record<AccessFilter, string> = {
@@ -89,6 +99,7 @@ function materialToForm(material: MaterialInfo): MaterialForm {
     shortDescription: material.shortDescription ?? '',
     fullDescription: material.fullDescription ?? '',
     accessType: safeAccessType as MaterialForm['accessType'],
+    categoryId: material.categoryId ?? '',
     fileType: safeFileType as MaterialForm['fileType'],
     priceRubles: String(material.priceRubles ?? 0),
     isPublished: material.isPublished,
@@ -96,6 +107,23 @@ function materialToForm(material: MaterialInfo): MaterialForm {
     seoTitle: material.seoTitle ?? '',
     seoDescription: material.seoDescription ?? '',
     program: material.program ?? '',
+  };
+}
+
+function emptyMaterialForm(): MaterialForm {
+  return {
+    title: '',
+    shortDescription: '',
+    fullDescription: '',
+    accessType: 'store',
+    categoryId: '',
+    fileType: 'PDF',
+    priceRubles: '0',
+    isPublished: false,
+    isFeatured: false,
+    seoTitle: '',
+    seoDescription: '',
+    program: '',
   };
 }
 
@@ -135,6 +163,7 @@ export function MaterialFileManager() {
   const [materials, setMaterials] = useState<MaterialRow[]>([]);
   const [materialsLoading, setMaterialsLoading] = useState(true);
   const [materialsError, setMaterialsError] = useState('');
+  const [categories, setCategories] = useState<CategoryRow[]>([]);
 
   const [selectedMaterial, setSelectedMaterial] = useState<MaterialInfo | null>(null);
   const [materialForm, setMaterialForm] = useState<MaterialForm | null>(null);
@@ -142,6 +171,11 @@ export function MaterialFileManager() {
   const [saveError, setSaveError] = useState('');
   const [saveSuccess, setSaveSuccess] = useState('');
   const [statusChangeConfirmed, setStatusChangeConfirmed] = useState(false);
+  const [createOpen, setCreateOpen] = useState(false);
+  const [createForm, setCreateForm] = useState<MaterialForm>(() => emptyMaterialForm());
+  const [createLoading, setCreateLoading] = useState(false);
+  const [createError, setCreateError] = useState('');
+  const [createSuccess, setCreateSuccess] = useState('');
   const [files, setFiles] = useState<MaterialFileRow[]>([]);
   const [detailsLoading, setDetailsLoading] = useState(false);
   const [detailsError, setDetailsError] = useState('');
@@ -161,6 +195,13 @@ export function MaterialFileManager() {
   const [manualSuccess, setManualSuccess] = useState('');
 
   const selectedSlug = selectedMaterial?.slug ?? '';
+
+  useEffect(() => {
+    fetch('/api/admin/categories', { credentials: 'include' })
+      .then(res => (res.ok ? res.json() : null))
+      .then(data => setCategories(data?.categories ?? []))
+      .catch(() => setCategories([]));
+  }, []);
 
   useEffect(() => {
     const controller = new AbortController();
@@ -235,6 +276,59 @@ export function MaterialFileManager() {
     setStatusChangeConfirmed(false);
   }
 
+  function updateCreateForm<K extends keyof MaterialForm>(key: K, value: MaterialForm[K]) {
+    setCreateForm(prev => {
+      const next = { ...prev, [key]: value };
+      if (key === 'accessType' && value !== 'store') {
+        next.priceRubles = '0';
+      }
+      return next;
+    });
+    setCreateError('');
+    setCreateSuccess('');
+  }
+
+  async function handleCreateMaterial(e: React.FormEvent) {
+    e.preventDefault();
+    setCreateLoading(true);
+    setCreateError('');
+    setCreateSuccess('');
+    try {
+      const res = await fetch('/api/admin/materials', {
+        method: 'POST',
+        credentials: 'include',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          ...createForm,
+          priceRubles: createForm.accessType === 'store' ? Number(createForm.priceRubles || 0) : 0,
+        }),
+      });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error ?? 'Не удалось создать материал');
+
+      setCreateSuccess('Материал создан. Теперь можно загрузить файл.');
+      setCreateForm(emptyMaterialForm());
+      setCreateOpen(false);
+      setSearch('');
+      setAccessFilter('all');
+      setMaterials(prev => [{
+        id: data.material.id,
+        slug: data.material.slug,
+        title: data.material.title,
+        accessType: data.material.accessType,
+        fileType: data.material.fileType,
+        isPublished: data.material.isPublished,
+        categoryName: categories.find(category => category.id === data.material.categoryId)?.name ?? '',
+        fileCount: 0,
+      }, ...prev]);
+      await selectMaterial(data.material.slug);
+    } catch (err) {
+      setCreateError(err instanceof Error ? err.message : 'Не удалось создать материал');
+    } finally {
+      setCreateLoading(false);
+    }
+  }
+
   async function handleSaveMaterial(e: React.FormEvent) {
     e.preventDefault();
     if (!selectedMaterial || !materialForm) return;
@@ -267,6 +361,7 @@ export function MaterialFileManager() {
               accessType: data.material.accessType,
               fileType: data.material.fileType,
               isPublished: data.material.isPublished,
+              categoryName: categories.find(category => category.id === data.material.categoryId)?.name ?? '',
             }
           : item
       )));
@@ -375,12 +470,198 @@ export function MaterialFileManager() {
 
   return (
     <div className="space-y-5">
-      <div>
-        <h1 className="text-2xl font-bold text-gray-900 mb-1">Документы</h1>
-        <p className="text-sm text-gray-500">
-          Здесь выбирается материал и подключаются файлы: основной документ, превью или обложка.
-        </p>
+      <div className="flex flex-col lg:flex-row lg:items-start lg:justify-between gap-3">
+        <div>
+          <h1 className="text-2xl font-bold text-gray-900 mb-1">Документы</h1>
+          <p className="text-sm text-gray-500">
+            Здесь создаются материалы, выбирается раздел и подключаются файлы: основной документ, превью или обложка.
+          </p>
+        </div>
+        <button
+          type="button"
+          onClick={() => {
+            setCreateOpen(true);
+            setCreateError('');
+            setCreateSuccess('');
+          }}
+          className="inline-flex items-center justify-center gap-2 px-4 py-2.5 bg-blue-500 hover:bg-blue-600 text-white text-sm font-semibold rounded-xl transition-colors"
+        >
+          <PlusCircle className="w-4 h-4" />
+          Создать материал
+        </button>
       </div>
+
+      {createSuccess && (
+        <div className="flex items-center gap-2 text-sm text-green-700 bg-green-50 border border-green-100 rounded-xl px-4 py-3">
+          <CheckCircle2 className="w-4 h-4 flex-shrink-0" />
+          {createSuccess}
+        </div>
+      )}
+
+      {createOpen && (
+        <section className="bg-white rounded-2xl border border-blue-100 shadow-sm p-5">
+          <div className="flex items-start justify-between gap-3 mb-4">
+            <div>
+              <h2 className="text-lg font-bold text-gray-900">Новый материал</h2>
+              <p className="text-sm text-gray-500 mt-1">
+                Заполните понятные поля. Адрес страницы создастся автоматически из названия.
+              </p>
+            </div>
+            <button
+              type="button"
+              onClick={() => setCreateOpen(false)}
+              className="p-2 rounded-lg hover:bg-gray-100 text-gray-400"
+              aria-label="Закрыть"
+            >
+              <X className="w-5 h-5" />
+            </button>
+          </div>
+
+          <form onSubmit={handleCreateMaterial} className="space-y-4">
+            <div className="grid md:grid-cols-2 gap-3">
+              <div className="md:col-span-2">
+                <label className="block text-xs font-medium text-gray-600 mb-1">Название *</label>
+                <input
+                  value={createForm.title}
+                  onChange={e => updateCreateForm('title', e.target.value)}
+                  maxLength={220}
+                  required
+                  placeholder="Например: Конспект занятия «Весна пришла»"
+                  className="w-full px-3.5 py-2.5 border border-gray-300 rounded-xl text-sm outline-none focus:border-blue-400 focus:ring-2 focus:ring-blue-100"
+                />
+              </div>
+
+              <div>
+                <label className="block text-xs font-medium text-gray-600 mb-1">Раздел</label>
+                <select
+                  value={createForm.categoryId}
+                  onChange={e => updateCreateForm('categoryId', e.target.value)}
+                  className="w-full px-3.5 py-2.5 border border-gray-300 rounded-xl text-sm bg-white outline-none focus:border-blue-400 focus:ring-2 focus:ring-blue-100"
+                >
+                  <option value="">Без раздела</option>
+                  {categories.map(category => (
+                    <option key={category.id} value={category.id}>{category.name}</option>
+                  ))}
+                </select>
+              </div>
+
+              <div>
+                <label className="block text-xs font-medium text-gray-600 mb-1">Программа</label>
+                <input
+                  value={createForm.program}
+                  onChange={e => updateCreateForm('program', e.target.value)}
+                  maxLength={160}
+                  placeholder="Например: ФОП ДО"
+                  className="w-full px-3.5 py-2.5 border border-gray-300 rounded-xl text-sm outline-none focus:border-blue-400 focus:ring-2 focus:ring-blue-100"
+                />
+              </div>
+
+              <div>
+                <label className="block text-xs font-medium text-gray-600 mb-1">Тип доступа</label>
+                <select
+                  value={createForm.accessType}
+                  onChange={e => updateCreateForm('accessType', e.target.value as MaterialForm['accessType'])}
+                  className="w-full px-3.5 py-2.5 border border-gray-300 rounded-xl text-sm bg-white outline-none focus:border-blue-400 focus:ring-2 focus:ring-blue-100"
+                >
+                  <option value="store">Магазин</option>
+                  <option value="free">Бесплатный</option>
+                  <option value="subscription">По подписке</option>
+                </select>
+              </div>
+
+              <div>
+                <label className="block text-xs font-medium text-gray-600 mb-1">Тип файла</label>
+                <select
+                  value={createForm.fileType}
+                  onChange={e => updateCreateForm('fileType', e.target.value as MaterialForm['fileType'])}
+                  className="w-full px-3.5 py-2.5 border border-gray-300 rounded-xl text-sm bg-white outline-none focus:border-blue-400 focus:ring-2 focus:ring-blue-100"
+                >
+                  <option value="PDF">PDF</option>
+                  <option value="DOCX">DOCX</option>
+                  <option value="PPT">PPT</option>
+                  <option value="PPTX">PPTX</option>
+                </select>
+              </div>
+
+              <div>
+                <label className="block text-xs font-medium text-gray-600 mb-1">Цена, ₽</label>
+                <input
+                  type="number"
+                  min={0}
+                  step="0.01"
+                  value={createForm.priceRubles}
+                  onChange={e => updateCreateForm('priceRubles', e.target.value)}
+                  disabled={createForm.accessType !== 'store'}
+                  className="w-full px-3.5 py-2.5 border border-gray-300 rounded-xl text-sm outline-none focus:border-blue-400 focus:ring-2 focus:ring-blue-100 disabled:bg-gray-100 disabled:text-gray-400"
+                />
+              </div>
+
+              <div className="flex flex-col justify-end gap-2">
+                <label className="inline-flex items-center gap-2 text-sm text-gray-700">
+                  <input
+                    type="checkbox"
+                    checked={createForm.isPublished}
+                    onChange={e => updateCreateForm('isPublished', e.target.checked)}
+                    className="w-4 h-4 rounded border-gray-300 text-blue-600"
+                  />
+                  Опубликовать сразу
+                </label>
+                <label className="inline-flex items-center gap-2 text-sm text-gray-700">
+                  <input
+                    type="checkbox"
+                    checked={createForm.isFeatured}
+                    onChange={e => updateCreateForm('isFeatured', e.target.checked)}
+                    className="w-4 h-4 rounded border-gray-300 text-blue-600"
+                  />
+                  Избранный материал
+                </label>
+              </div>
+
+              <div className="md:col-span-2">
+                <label className="block text-xs font-medium text-gray-600 mb-1">Короткое описание</label>
+                <textarea
+                  value={createForm.shortDescription}
+                  onChange={e => updateCreateForm('shortDescription', e.target.value)}
+                  maxLength={500}
+                  rows={2}
+                  className="w-full px-3.5 py-2.5 border border-gray-300 rounded-xl text-sm outline-none focus:border-blue-400 focus:ring-2 focus:ring-blue-100 resize-y"
+                />
+              </div>
+
+              <div className="md:col-span-2">
+                <label className="block text-xs font-medium text-gray-600 mb-1">Полное описание</label>
+                <textarea
+                  value={createForm.fullDescription}
+                  onChange={e => updateCreateForm('fullDescription', e.target.value)}
+                  maxLength={5000}
+                  rows={3}
+                  className="w-full px-3.5 py-2.5 border border-gray-300 rounded-xl text-sm outline-none focus:border-blue-400 focus:ring-2 focus:ring-blue-100 resize-y"
+                />
+              </div>
+            </div>
+
+            <div className="rounded-xl border border-green-100 bg-green-50 px-4 py-3 text-xs text-green-800">
+              Защита включена: slug создаётся автоматически, новый материал пишется в журнал изменений, файл можно загрузить сразу после создания.
+            </div>
+
+            {createError && (
+              <div className="flex items-center gap-2 text-sm text-red-600 bg-red-50 border border-red-100 rounded-xl px-4 py-3">
+                <AlertCircle className="w-4 h-4 flex-shrink-0" />
+                {createError}
+              </div>
+            )}
+
+            <button
+              type="submit"
+              disabled={createLoading || !createForm.title.trim()}
+              className="inline-flex items-center gap-2 px-5 py-2.5 bg-gray-900 hover:bg-gray-800 text-white text-sm font-semibold rounded-xl transition-colors disabled:opacity-50"
+            >
+              {createLoading ? <Loader2 className="w-4 h-4 animate-spin" /> : <PlusCircle className="w-4 h-4" />}
+              {createLoading ? 'Создание...' : 'Создать материал'}
+            </button>
+          </form>
+        </section>
+      )}
 
       <div className="grid lg:grid-cols-[minmax(280px,380px)_1fr] gap-5">
         <section className="bg-white rounded-2xl border border-gray-200 shadow-sm overflow-hidden">
@@ -540,6 +821,20 @@ export function MaterialFileManager() {
                             disabled
                             className="w-full px-3.5 py-2.5 border border-gray-200 bg-white/70 rounded-xl text-sm font-mono text-gray-400"
                           />
+                        </div>
+
+                        <div>
+                          <label className="block text-xs font-medium text-gray-600 mb-1">Раздел</label>
+                          <select
+                            value={materialForm.categoryId}
+                            onChange={e => updateMaterialForm('categoryId', e.target.value)}
+                            className="w-full px-3.5 py-2.5 border border-gray-300 rounded-xl text-sm bg-white outline-none focus:border-blue-400 focus:ring-2 focus:ring-blue-100"
+                          >
+                            <option value="">Без раздела</option>
+                            {categories.map(category => (
+                              <option key={category.id} value={category.id}>{category.name}</option>
+                            ))}
+                          </select>
                         </div>
 
                         <div>

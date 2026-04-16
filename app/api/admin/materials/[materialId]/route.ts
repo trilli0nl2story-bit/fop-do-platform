@@ -33,6 +33,18 @@ function priceToKopecks(value: unknown): number | null {
   return Math.round(numeric * 100);
 }
 
+async function normalizeCategoryId(value: unknown): Promise<string | null> {
+  if (value === undefined || value === null || value === '') return null;
+  if (typeof value !== 'string') throw new Error('Раздел выбран неверно');
+
+  const result = await query<{ id: string }>(
+    'SELECT id FROM categories WHERE id = $1 LIMIT 1',
+    [value]
+  );
+  if (result.rows.length === 0) throw new Error('Раздел не найден');
+  return value;
+}
+
 function publicMaterial(row: {
   id: string;
   slug: string;
@@ -40,6 +52,7 @@ function publicMaterial(row: {
   short_description: string;
   full_description: string;
   access_type: string;
+  category_id: string | null;
   file_type: string;
   price: number | string;
   is_published: boolean;
@@ -56,6 +69,7 @@ function publicMaterial(row: {
     shortDescription: row.short_description,
     fullDescription: row.full_description,
     accessType: row.access_type,
+    categoryId: row.category_id,
     fileType: row.file_type,
     priceRubles: Math.round(Number(row.price ?? 0)) / 100,
     isPublished: row.is_published,
@@ -91,6 +105,7 @@ export async function PATCH(request: Request, { params }: Params) {
       short_description: string;
       full_description: string;
       access_type: string;
+      category_id: string | null;
       file_type: string;
       price: number | string;
       is_published: boolean;
@@ -100,7 +115,7 @@ export async function PATCH(request: Request, { params }: Params) {
       program: string;
       updated_at: string;
     }>(
-      `SELECT id, slug, title, short_description, full_description, access_type, file_type,
+      `SELECT id, slug, title, short_description, full_description, access_type, category_id, file_type,
               price, is_published, is_featured, seo_title, seo_description, program, updated_at
        FROM materials
        WHERE id = $1
@@ -142,6 +157,13 @@ export async function PATCH(request: Request, { params }: Params) {
       return NextResponse.json({ error: 'Статусы должны быть включены или выключены' }, { status: 400 });
     }
 
+    let categoryId: string | null;
+    try {
+      categoryId = await normalizeCategoryId(body.categoryId);
+    } catch (err) {
+      return NextResponse.json({ error: err instanceof Error ? err.message : 'Раздел выбран неверно' }, { status: 400 });
+    }
+
     const normalizedPrice = accessType === 'store' ? price : 0;
 
     const afterResult = await query<typeof before>(
@@ -150,16 +172,17 @@ export async function PATCH(request: Request, { params }: Params) {
            short_description = $3,
            full_description = $4,
            access_type = $5,
-           file_type = $6,
-           price = $7,
-           is_published = $8,
-           is_featured = $9,
-           seo_title = $10,
-           seo_description = $11,
-           program = $12,
+           category_id = $6,
+           file_type = $7,
+           price = $8,
+           is_published = $9,
+           is_featured = $10,
+           seo_title = $11,
+           seo_description = $12,
+           program = $13,
            updated_at = now()
        WHERE id = $1
-       RETURNING id, slug, title, short_description, full_description, access_type, file_type,
+       RETURNING id, slug, title, short_description, full_description, access_type, category_id, file_type,
                  price, is_published, is_featured, seo_title, seo_description, program, updated_at`,
       [
         materialId,
@@ -167,6 +190,7 @@ export async function PATCH(request: Request, { params }: Params) {
         shortDescription ?? '',
         fullDescription ?? '',
         accessType,
+        categoryId,
         fileType,
         normalizedPrice,
         isPublished,
