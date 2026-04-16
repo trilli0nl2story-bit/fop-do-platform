@@ -1,5 +1,6 @@
 export interface StoreProduct {
   id: number;
+  materialId?: string;
   slug: string;
   title: string;
   shortDescription: string;
@@ -8,9 +9,14 @@ export interface StoreProduct {
   categorySlug: string;
   ageGroup: string;
   price: number;
-  fileType: 'PDF' | 'DOCX' | 'PPT';
+  fileType: 'PDF' | 'DOCX' | 'PPT' | 'PPTX';
   program: string;
   programColor: string;
+  coverUrl?: string;
+  previewText?: string;
+  previewFileUrl?: string;
+  seoTitle?: string;
+  seoDescription?: string;
   whatIsIncluded?: string[];
   ktpMonth?: string;
   ktpAgeKey?: string;

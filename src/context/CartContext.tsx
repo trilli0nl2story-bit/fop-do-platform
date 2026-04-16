@@ -5,7 +5,7 @@ export interface CartItem {
   title: string;
   category: string;
   price: number;
-  fileType: 'PDF' | 'DOCX' | 'PPT';
+  fileType: 'PDF' | 'DOCX' | 'PPT' | 'PPTX';
 }
 
 interface CartContextType {

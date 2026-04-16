@@ -1,9 +1,10 @@
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import { Search, ShoppingBag, Eye, ShoppingCart, Check, FileText, Zap, Gift, Clock, TrendingUp } from 'lucide-react';
 import { Input } from '../../components/Input';
 import { Button } from '../../components/Button';
 import { KTP_MONTHS, KTP_AGE_GROUPS, StoreProduct } from '../../data/storeProducts';
 import { getMergedStoreProducts } from '../../lib/cmsProducts';
+import { dbMaterialToStoreProduct } from '../../lib/dbStoreProducts';
 import { getVisibleCategories } from '../../lib/cmsCategories';
 import { useCart } from '../../context/CartContext';
 import { usePostPurchaseDiscount } from '../../context/PostPurchaseDiscountContext';
@@ -18,6 +19,7 @@ const fileTypeColors: Record<string, string> = {
   PDF: 'bg-red-50 text-red-600',
   DOCX: 'bg-blue-50 text-blue-600',
   PPT: 'bg-orange-50 text-orange-600',
+  PPTX: 'bg-orange-50 text-orange-600',
 };
 
 const USE_CASES = [
@@ -76,8 +78,12 @@ function StoreProductCard({
     <div className="bg-white border border-gray-200 rounded-xl p-5 hover:border-blue-200 hover:shadow-sm transition-all">
       <div className="flex flex-col sm:flex-row sm:items-start justify-between gap-4">
         <div className="flex gap-4 flex-1">
-          <div className="w-11 h-11 bg-gray-50 border border-gray-200 rounded-lg flex items-center justify-center flex-shrink-0">
-            <FileText className="w-5 h-5 text-gray-500" />
+          <div className="w-11 h-11 bg-gray-50 border border-gray-200 rounded-lg flex items-center justify-center flex-shrink-0 overflow-hidden">
+            {product.coverUrl ? (
+              <img src={product.coverUrl} alt="" className="w-full h-full object-cover" loading="lazy" />
+            ) : (
+              <FileText className="w-5 h-5 text-gray-500" />
+            )}
           </div>
           <div className="flex-1 min-w-0">
             <div className="flex flex-wrap items-center gap-2 mb-1.5">
@@ -231,6 +237,7 @@ export function StoreMaterials({ onNavigate, isAuthenticated = true }: StoreMate
   const [ktpMonth, setKtpMonth] = useState('Все месяцы');
   const [ktpAge, setKtpAge] = useState('Все возраста');
   const [activeUseCase, setActiveUseCase] = useState<string | null>(null);
+  const [dbProducts, setDbProducts] = useState<StoreProduct[]>([]);
   const { addItem, items } = useCart();
   const { discount, hoursRemaining } = usePostPurchaseDiscount();
   const hasActiveDiscount = discount && !discount.used;
@@ -259,8 +266,38 @@ export function StoreMaterials({ onNavigate, isAuthenticated = true }: StoreMate
     }
   };
 
-  const allProducts = getMergedStoreProducts();
-  const visibleCategoryNames = ['Все категории', ...getVisibleCategories().map(c => c.name)];
+  useEffect(() => {
+    let cancelled = false;
+
+    fetch('/api/materials/store')
+      .then(res => (res.ok ? res.json() : null))
+      .then(data => {
+        if (cancelled) return;
+        const products = Array.isArray(data?.materials)
+          ? data.materials.map(dbMaterialToStoreProduct)
+          : [];
+        setDbProducts(products);
+      })
+      .catch(() => {
+        if (!cancelled) setDbProducts([]);
+      });
+
+    return () => {
+      cancelled = true;
+    };
+  }, []);
+
+  const localProducts = getMergedStoreProducts();
+  const localSlugs = new Set(localProducts.map(product => product.slug));
+  const allProducts = [
+    ...dbProducts.filter(product => !localSlugs.has(product.slug)),
+    ...localProducts,
+  ];
+  const categoryNames = new Set([
+    ...getVisibleCategories().map(c => c.name),
+    ...dbProducts.map(product => product.category).filter(Boolean),
+  ]);
+  const visibleCategoryNames = ['Все категории', ...Array.from(categoryNames)];
 
   const filtered = allProducts.filter(p => {
     const matchesSearch =

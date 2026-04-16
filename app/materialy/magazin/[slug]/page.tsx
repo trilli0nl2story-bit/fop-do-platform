@@ -1,5 +1,4 @@
 import type { Metadata } from 'next';
-import { notFound } from 'next/navigation';
 import { storeProducts } from '../../../../src/data/storeProducts';
 import { ProductDetailClient } from './client';
 
@@ -26,9 +25,5 @@ export async function generateMetadata({ params }: PageProps): Promise<Metadata>
 
 export default async function ProductDetailPage({ params }: PageProps) {
   const { slug } = await params;
-  const product = storeProducts.find((p) => p.slug === slug);
-  if (!product) {
-    notFound();
-  }
   return <ProductDetailClient slug={slug} />;
 }

@@ -26,6 +26,7 @@ import {
   X,
 } from 'lucide-react';
 import { MaterialFileManager } from './material-file-manager';
+import { CategoryManager } from './category-manager';
 
 type LoadState = 'loading' | 'unauth' | 'forbidden' | 'ready';
 type AdminSection =
@@ -89,7 +90,7 @@ const navItems: Array<{
   { id: 'authors', label: 'Авторы', icon: <TrendingUp className="w-5 h-5" />, ready: false },
   { id: 'applications', label: 'Заявки авторов', icon: <UserCheck className="w-5 h-5" />, ready: false },
   { id: 'documents', label: 'Документы', icon: <FileText className="w-5 h-5" />, ready: true },
-  { id: 'categories', label: 'Категории', icon: <FolderOpen className="w-5 h-5" />, ready: false },
+  { id: 'categories', label: 'Категории', icon: <FolderOpen className="w-5 h-5" />, ready: true },
   { id: 'subscriptions', label: 'Подписки', icon: <Crown className="w-5 h-5" />, ready: false },
   { id: 'referrals', label: 'Рефералы', icon: <Share2 className="w-5 h-5" />, ready: false },
   { id: 'ai', label: 'AI-запросы', icon: <Bot className="w-5 h-5" />, ready: false },
@@ -372,6 +373,7 @@ export function AdminClient() {
   function renderSection() {
     if (activeSection === 'dashboard') return <DashboardSection summary={summary} />;
     if (activeSection === 'documents') return <MaterialFileManager />;
+    if (activeSection === 'categories') return <CategoryManager />;
     return <DevelopmentNotice title={activeLabel} />;
   }
 

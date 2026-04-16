@@ -26,7 +26,9 @@ function cleanText(value: unknown, maxLength: number): string | null {
 function cleanUrl(value: unknown, maxLength = 1000): string | null {
   if (value === undefined || value === null || value === '') return '';
   if (typeof value !== 'string') return null;
-  const trimmed = value.trim().slice(0, maxLength);
+  const raw = value.trim();
+  const iframeSrc = raw.match(/src=["']([^"']+)["']/i)?.[1];
+  const trimmed = (iframeSrc ?? raw).trim().slice(0, maxLength);
   if (!trimmed) return '';
   if (trimmed.startsWith('/')) return trimmed;
   try {
@@ -45,6 +47,25 @@ function priceToKopecks(value: unknown): number | null {
   const numeric = typeof value === 'number' ? value : Number(value);
   if (!Number.isFinite(numeric) || numeric < 0 || numeric > 500000) return null;
   return Math.round(numeric * 100);
+}
+
+function buildSeoFields(params: {
+  title: string;
+  shortDescription: string;
+  previewText: string;
+  fullDescription: string;
+}) {
+  const source = (
+    params.shortDescription ||
+    params.previewText ||
+    params.fullDescription ||
+    params.title
+  ).trim();
+
+  return {
+    title: `${params.title.trim()} — материал для педагогов`,
+    description: source.slice(0, 180),
+  };
 }
 
 async function normalizeCategoryId(value: unknown): Promise<string | null> {
@@ -198,6 +219,12 @@ export async function PATCH(request: Request, { params }: Params) {
     }
 
     const normalizedPrice = accessType === 'store' ? price : 0;
+    const seoFallback = buildSeoFields({
+      title,
+      shortDescription: shortDescription ?? '',
+      previewText: previewText ?? '',
+      fullDescription: fullDescription ?? '',
+    });
 
     const afterResult = await query<typeof before>(
       `UPDATE materials
@@ -235,8 +262,8 @@ export async function PATCH(request: Request, { params }: Params) {
         previewFileUrl,
         isPublished,
         isFeatured,
-        seoTitle ?? '',
-        seoDescription ?? '',
+        seoTitle || seoFallback.title,
+        seoDescription || seoFallback.description,
         program ?? '',
       ]
     );

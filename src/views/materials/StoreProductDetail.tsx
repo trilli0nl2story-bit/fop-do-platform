@@ -1,4 +1,4 @@
-import { useState, useMemo } from 'react';
+import { useEffect, useState, useMemo } from 'react';
 import {
   ArrowLeft, ShoppingCart, Eye, FileText, Check, Tag, Users, BookOpen,
   ChevronRight, ChevronDown, X, Image as ImageIcon, Lock, Sparkles,
@@ -7,6 +7,7 @@ import {
 import { Button } from '../../components/Button';
 import { getRelatedProducts, RelatedProduct, StoreProduct } from '../../data/storeProducts';
 import { getMergedProductBySlug } from '../../lib/cmsProducts';
+import { dbMaterialToStoreProduct } from '../../lib/dbStoreProducts';
 import { useCart } from '../../context/CartContext';
 import { InlineActivityHint } from '../../components/InlineActivityHint';
 import { randomDownloadCount } from '../../data/notifications';
@@ -23,6 +24,7 @@ const fileTypeColors: Record<string, string> = {
   PDF: 'bg-red-50 text-red-600 border-red-100',
   DOCX: 'bg-blue-50 text-blue-600 border-blue-100',
   PPT: 'bg-orange-50 text-orange-600 border-orange-100',
+  PPTX: 'bg-orange-50 text-orange-600 border-orange-100',
 };
 
 function getForWhom(product: StoreProduct): string[] {
@@ -118,15 +120,49 @@ export function StoreProductDetail({ slug, onNavigate, isAuthenticated = true }:
   const [addedItems, setAddedItems] = useState<Set<number>>(new Set());
   const [subscriptionActivated, setSubscriptionActivated] = useState(false);
   const [detailsOpen, setDetailsOpen] = useState(false);
+  const [dbProduct, setDbProduct] = useState<StoreProduct | null>(null);
+  const [dbProductLoading, setDbProductLoading] = useState(false);
 
-  const product = getMergedProductBySlug(slug);
+  const localProduct = getMergedProductBySlug(slug);
+  const product = localProduct ?? dbProduct;
   const { addItem, items } = useCart();
   const relatedProducts: RelatedProduct[] = product ? getRelatedProducts(product) : [];
+
+  useEffect(() => {
+    if (localProduct) return;
+    let cancelled = false;
+    setDbProductLoading(true);
+
+    fetch(`/api/materials/store/${encodeURIComponent(slug)}`)
+      .then(res => (res.ok ? res.json() : null))
+      .then(data => {
+        if (cancelled) return;
+        setDbProduct(data?.material ? dbMaterialToStoreProduct(data.material) : null);
+      })
+      .catch(() => {
+        if (!cancelled) setDbProduct(null);
+      })
+      .finally(() => {
+        if (!cancelled) setDbProductLoading(false);
+      });
+
+    return () => {
+      cancelled = true;
+    };
+  }, [localProduct, slug]);
 
   const handleAddUpsell = (rp: RelatedProduct['product']) => {
     addItem({ id: rp.id, title: rp.title, category: rp.category, price: rp.price, fileType: rp.fileType });
     setAddedItems(prev => new Set(prev).add(rp.id));
   };
+
+  if (!product && dbProductLoading) {
+    return (
+      <div className="max-w-4xl mx-auto px-4 sm:px-6 lg:px-8 py-16 text-center">
+        <p className="text-gray-500 text-lg">Загрузка материала...</p>
+      </div>
+    );
+  }
 
   if (!product) {
     return (
@@ -506,12 +542,18 @@ export function StoreProductDetail({ slug, onNavigate, isAuthenticated = true }:
                 </div>
               )}
 
-              <div className="bg-gray-50 border-2 border-dashed border-gray-200 rounded-xl aspect-video flex flex-col items-center justify-center text-center p-8">
-                <div className="w-12 h-12 bg-gray-200 rounded-2xl flex items-center justify-center mb-3">
-                  <ImageIcon className="w-6 h-6 text-gray-400" />
-                </div>
-                <p className="text-sm font-medium text-gray-500 mb-1">Обложка и предпросмотр</p>
-                <p className="text-xs text-gray-400 max-w-xs">Посмотрите часть документа перед покупкой</p>
+              <div className="bg-gray-50 border-2 border-dashed border-gray-200 rounded-xl aspect-video flex flex-col items-center justify-center text-center p-8 overflow-hidden">
+                {product.coverUrl ? (
+                  <img src={product.coverUrl} alt="" className="w-full h-full object-contain" />
+                ) : (
+                  <>
+                    <div className="w-12 h-12 bg-gray-200 rounded-2xl flex items-center justify-center mb-3">
+                      <ImageIcon className="w-6 h-6 text-gray-400" />
+                    </div>
+                    <p className="text-sm font-medium text-gray-500 mb-1">Обложка и предпросмотр</p>
+                    <p className="text-xs text-gray-400 max-w-xs">Посмотрите часть документа перед покупкой</p>
+                  </>
+                )}
                 <button onClick={() => setShowPreview(true)} className="mt-3 inline-flex items-center gap-2 text-xs font-medium text-blue-600 hover:text-blue-700 transition-colors">
                   <Eye className="w-3.5 h-3.5" />Открыть предпросмотр
                 </button>

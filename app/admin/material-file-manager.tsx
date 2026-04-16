@@ -147,6 +147,21 @@ function normalizeFormForCompare(form: MaterialForm | null) {
   });
 }
 
+function buildSeoFields(form: MaterialForm) {
+  const title = form.title.trim();
+  const descriptionSource = (
+    form.shortDescription ||
+    form.previewText ||
+    form.fullDescription ||
+    title
+  ).trim();
+
+  return {
+    seoTitle: title ? `${title} — материал для педагогов` : '',
+    seoDescription: descriptionSource.slice(0, 180),
+  };
+}
+
 function formatDate(iso: string) {
   return new Date(iso).toLocaleString('ru-RU', {
     day: 'numeric',
@@ -306,12 +321,15 @@ export function MaterialFileManager() {
     setCreateError('');
     setCreateSuccess('');
     try {
+      const seo = buildSeoFields(createForm);
       const res = await fetch('/api/admin/materials', {
         method: 'POST',
         credentials: 'include',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           ...createForm,
+          seoTitle: createForm.seoTitle || seo.seoTitle,
+          seoDescription: createForm.seoDescription || seo.seoDescription,
           priceRubles: createForm.accessType === 'store' ? Number(createForm.priceRubles || 0) : 0,
         }),
       });
@@ -349,12 +367,15 @@ export function MaterialFileManager() {
     setSaveError('');
     setSaveSuccess('');
     try {
+      const seo = buildSeoFields(materialForm);
       const res = await fetch(`/api/admin/materials/${encodeURIComponent(selectedMaterial.id)}`, {
         method: 'PATCH',
         credentials: 'include',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           ...materialForm,
+          seoTitle: materialForm.seoTitle || seo.seoTitle,
+          seoDescription: materialForm.seoDescription || seo.seoDescription,
           priceRubles: materialForm.accessType === 'store' ? Number(materialForm.priceRubles || 0) : 0,
         }),
       });
@@ -414,6 +435,14 @@ export function MaterialFileManager() {
       const data = await res.json();
       if (!res.ok) throw new Error(data.message ?? data.error ?? 'Не удалось загрузить файл');
       setUploadSuccess(`Файл загружен и подключён к материалу`);
+      if (data.materialUpdate?.coverUrl || data.materialUpdate?.previewFileUrl) {
+        const patch = {
+          ...(data.materialUpdate.coverUrl ? { coverUrl: data.materialUpdate.coverUrl } : {}),
+          ...(data.materialUpdate.previewFileUrl ? { previewFileUrl: data.materialUpdate.previewFileUrl } : {}),
+        };
+        setSelectedMaterial(prev => (prev ? { ...prev, ...patch } : prev));
+        setMaterialForm(prev => (prev ? { ...prev, ...patch } : prev));
+      }
       setUploadFile(null);
       await refreshSelectedFiles();
       setMaterials(prev => prev.map(item => (
@@ -939,6 +968,37 @@ export function MaterialFileManager() {
                           />
                         </div>
 
+                        {(materialForm.coverUrl || materialForm.previewText || materialForm.previewFileUrl) && (
+                          <div className="md:col-span-2 rounded-2xl border border-blue-100 bg-blue-50/50 p-4">
+                            <p className="text-xs font-semibold uppercase tracking-wide text-blue-700 mb-3">Как это выглядит на сайте</p>
+                            <div className="grid sm:grid-cols-[160px_1fr] gap-4">
+                              <div className="aspect-[4/3] rounded-xl bg-white border border-blue-100 overflow-hidden flex items-center justify-center">
+                                {materialForm.coverUrl ? (
+                                  <img src={materialForm.coverUrl} alt="" className="w-full h-full object-cover" />
+                                ) : (
+                                  <FileText className="w-8 h-8 text-blue-200" />
+                                )}
+                              </div>
+                              <div className="min-w-0">
+                                <p className="font-semibold text-gray-900 line-clamp-2">{materialForm.title || selectedMaterial.title}</p>
+                                <p className="text-sm text-gray-600 mt-2 line-clamp-3">
+                                  {materialForm.previewText || materialForm.shortDescription || 'Текст предпросмотра появится здесь.'}
+                                </p>
+                                {materialForm.previewFileUrl && (
+                                  <a
+                                    href={materialForm.previewFileUrl}
+                                    target="_blank"
+                                    rel="noreferrer"
+                                    className="inline-flex mt-3 text-sm font-semibold text-blue-600 hover:text-blue-700"
+                                  >
+                                    Открыть превью
+                                  </a>
+                                )}
+                              </div>
+                            </div>
+                          </div>
+                        )}
+
                         <div className="md:col-span-2">
                           <label className="block text-xs font-medium text-gray-600 mb-1">Полное описание</label>
                           <textarea
@@ -1016,6 +1076,18 @@ export function MaterialFileManager() {
 
                         <div>
                           <label className="block text-xs font-medium text-gray-600 mb-1">SEO-заголовок</label>
+                          <button
+                            type="button"
+                            onClick={() => {
+                              const seo = buildSeoFields(materialForm);
+                              setMaterialForm(prev => (prev ? { ...prev, ...seo } : prev));
+                              setSaveError('');
+                              setSaveSuccess('');
+                            }}
+                            className="mb-2 text-xs font-semibold text-blue-600 hover:text-blue-700"
+                          >
+                            Заполнить SEO автоматически
+                          </button>
                           <input
                             value={materialForm.seoTitle}
                             onChange={e => updateMaterialForm('seoTitle', e.target.value)}

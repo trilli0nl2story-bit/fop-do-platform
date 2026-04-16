@@ -114,10 +114,29 @@ export async function POST(request: Request) {
       });
     }
 
+    let materialUpdate: { coverUrl?: string; previewFileUrl?: string } = {};
+    if (fileRole === 'cover' || fileRole === 'preview') {
+      const mediaUrl = `/api/materials/media/${created.id}`;
+      if (fileRole === 'cover') {
+        await query(
+          `UPDATE materials SET cover_url = $2, updated_at = now() WHERE id = $1`,
+          [material.id, mediaUrl]
+        );
+        materialUpdate = { coverUrl: mediaUrl };
+      } else {
+        await query(
+          `UPDATE materials SET preview_file_url = $2, updated_at = now() WHERE id = $1`,
+          [material.id, mediaUrl]
+        );
+        materialUpdate = { previewFileUrl: mediaUrl };
+      }
+    }
+
     return NextResponse.json({
       ok: true,
       storage: isStorageConfigured() ? 's3' : 'database',
       file: created,
+      materialUpdate,
     }, { status: 201 });
   } catch (err) {
     console.error('[api/admin/material-files/upload]', err instanceof Error ? err.message : String(err));
