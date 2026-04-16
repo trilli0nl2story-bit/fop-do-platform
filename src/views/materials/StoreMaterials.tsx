@@ -58,6 +58,24 @@ function getContentHint(product: StoreProduct): string {
   return 'Содержит: готовые материалы для применения';
 }
 
+function ProductCoverThumb({ src }: { src?: string }) {
+  const [failed, setFailed] = useState(false);
+
+  if (!src || failed) {
+    return <FileText className="w-5 h-5 text-gray-500" />;
+  }
+
+  return (
+    <img
+      src={src}
+      alt=""
+      className="w-full h-full object-cover"
+      loading="lazy"
+      onError={() => setFailed(true)}
+    />
+  );
+}
+
 function StoreProductCard({
   product,
   isInCart,
@@ -79,11 +97,7 @@ function StoreProductCard({
       <div className="flex flex-col sm:flex-row sm:items-start justify-between gap-4">
         <div className="flex gap-4 flex-1">
           <div className="w-11 h-11 bg-gray-50 border border-gray-200 rounded-lg flex items-center justify-center flex-shrink-0 overflow-hidden">
-            {product.coverUrl ? (
-              <img src={product.coverUrl} alt="" className="w-full h-full object-cover" loading="lazy" />
-            ) : (
-              <FileText className="w-5 h-5 text-gray-500" />
-            )}
+            <ProductCoverThumb src={product.coverUrl} />
           </div>
           <div className="flex-1 min-w-0">
             <div className="flex flex-wrap items-center gap-2 mb-1.5">

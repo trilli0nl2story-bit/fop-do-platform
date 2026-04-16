@@ -974,7 +974,14 @@ export function MaterialFileManager() {
                             <div className="grid sm:grid-cols-[160px_1fr] gap-4">
                               <div className="aspect-[4/3] rounded-xl bg-white border border-blue-100 overflow-hidden flex items-center justify-center">
                                 {materialForm.coverUrl ? (
-                                  <img src={materialForm.coverUrl} alt="" className="w-full h-full object-cover" />
+                                  <img
+                                    src={materialForm.coverUrl}
+                                    alt=""
+                                    className="w-full h-full object-cover"
+                                    onError={e => {
+                                      e.currentTarget.style.display = 'none';
+                                    }}
+                                  />
                                 ) : (
                                   <FileText className="w-8 h-8 text-blue-200" />
                                 )}

@@ -1,4 +1,4 @@
-import { useEffect, useState, useMemo } from 'react';
+import { useEffect, useState } from 'react';
 import {
   ArrowLeft, ShoppingCart, Eye, FileText, Check, Tag, Users, BookOpen,
   ChevronRight, ChevronDown, X, Image as ImageIcon, Lock, Sparkles,
@@ -26,6 +26,31 @@ const fileTypeColors: Record<string, string> = {
   PPT: 'bg-orange-50 text-orange-600 border-orange-100',
   PPTX: 'bg-orange-50 text-orange-600 border-orange-100',
 };
+
+function ProductPreviewImage({ src }: { src?: string }) {
+  const [failed, setFailed] = useState(false);
+
+  if (!src || failed) {
+    return (
+      <>
+        <div className="w-12 h-12 bg-gray-200 rounded-2xl flex items-center justify-center mb-3">
+          <ImageIcon className="w-6 h-6 text-gray-400" />
+        </div>
+        <p className="text-sm font-medium text-gray-500 mb-1">Обложка и предпросмотр</p>
+        <p className="text-xs text-gray-400 max-w-xs">Посмотрите часть документа перед покупкой</p>
+      </>
+    );
+  }
+
+  return (
+    <img
+      src={src}
+      alt=""
+      className="w-full h-full object-contain"
+      onError={() => setFailed(true)}
+    />
+  );
+}
 
 function getForWhom(product: StoreProduct): string[] {
   const cat = product.category;
@@ -122,6 +147,7 @@ export function StoreProductDetail({ slug, onNavigate, isAuthenticated = true }:
   const [detailsOpen, setDetailsOpen] = useState(false);
   const [dbProduct, setDbProduct] = useState<StoreProduct | null>(null);
   const [dbProductLoading, setDbProductLoading] = useState(false);
+  const [downloadCount] = useState(() => randomDownloadCount());
 
   const localProduct = getMergedProductBySlug(slug);
   const product = localProduct ?? dbProduct;
@@ -185,7 +211,7 @@ export function StoreProductDetail({ slug, onNavigate, isAuthenticated = true }:
   const forWhom = getForWhom(product);
   const whatYouGet = getWhatYouGet(product);
 
-  const docContext = useMemo(() => {
+  const docContext = (() => {
     const cat = product.category;
     if (cat.includes('КТП')) return 'ktp';
     if (cat === 'Диагностика') return 'diagnostics';
@@ -193,17 +219,15 @@ export function StoreProductDetail({ slug, onNavigate, isAuthenticated = true }:
     if (cat === 'Планы и документация') return 'parents';
     if (cat === 'Рабочие программы' || cat === 'ОП ДО / ФОП ДО') return 'program';
     return 'default';
-  }, [product.category]);
+  })();
 
-  const downloadCount = useMemo(() => randomDownloadCount(), []);
-
-  const ctaHints = useMemo(() => {
+  const ctaHints = (() => {
     const base = `${downloadCount} скачиваний сегодня · используют в 1000+ ДОУ`;
     if (docContext === 'ktp') return [base, 'Уже используют педагоги по всей России', 'Только что скачали: КТП на месяц'];
     if (docContext === 'diagnostics') return [base, 'Уже используют педагоги по всей России', 'Только что скачали: диагностику'];
     if (docContext === 'games') return [base, 'Уже используют педагоги по всей России', 'Только что скачали: квест'];
     return [base, 'Уже используют педагоги по всей России', 'Только что скачали этот материал'];
-  }, [docContext, downloadCount]);
+  })();
 
   const discountedPrice = Math.round(product.price * 0.75);
   const saving = product.price - discountedPrice;
@@ -543,17 +567,7 @@ export function StoreProductDetail({ slug, onNavigate, isAuthenticated = true }:
               )}
 
               <div className="bg-gray-50 border-2 border-dashed border-gray-200 rounded-xl aspect-video flex flex-col items-center justify-center text-center p-8 overflow-hidden">
-                {product.coverUrl ? (
-                  <img src={product.coverUrl} alt="" className="w-full h-full object-contain" />
-                ) : (
-                  <>
-                    <div className="w-12 h-12 bg-gray-200 rounded-2xl flex items-center justify-center mb-3">
-                      <ImageIcon className="w-6 h-6 text-gray-400" />
-                    </div>
-                    <p className="text-sm font-medium text-gray-500 mb-1">Обложка и предпросмотр</p>
-                    <p className="text-xs text-gray-400 max-w-xs">Посмотрите часть документа перед покупкой</p>
-                  </>
-                )}
+                <ProductPreviewImage src={product.coverUrl} />
                 <button onClick={() => setShowPreview(true)} className="mt-3 inline-flex items-center gap-2 text-xs font-medium text-blue-600 hover:text-blue-700 transition-colors">
                   <Eye className="w-3.5 h-3.5" />Открыть предпросмотр
                 </button>
