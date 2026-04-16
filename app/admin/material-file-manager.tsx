@@ -37,6 +37,9 @@ interface MaterialInfo {
   categoryId: string | null;
   fileType: string | null;
   priceRubles: number;
+  coverUrl: string;
+  previewText: string;
+  previewFileUrl: string;
   isPublished: boolean;
   isFeatured: boolean;
   seoTitle: string;
@@ -60,6 +63,9 @@ interface MaterialForm {
   categoryId: string;
   fileType: 'PDF' | 'DOCX' | 'PPT' | 'PPTX';
   priceRubles: string;
+  coverUrl: string;
+  previewText: string;
+  previewFileUrl: string;
   isPublished: boolean;
   isFeatured: boolean;
   seoTitle: string;
@@ -102,6 +108,9 @@ function materialToForm(material: MaterialInfo): MaterialForm {
     categoryId: material.categoryId ?? '',
     fileType: safeFileType as MaterialForm['fileType'],
     priceRubles: String(material.priceRubles ?? 0),
+    coverUrl: material.coverUrl ?? '',
+    previewText: material.previewText ?? '',
+    previewFileUrl: material.previewFileUrl ?? '',
     isPublished: material.isPublished,
     isFeatured: material.isFeatured,
     seoTitle: material.seoTitle ?? '',
@@ -119,6 +128,9 @@ function emptyMaterialForm(): MaterialForm {
     categoryId: '',
     fileType: 'PDF',
     priceRubles: '0',
+    coverUrl: '',
+    previewText: '',
+    previewFileUrl: '',
     isPublished: false,
     isFeatured: false,
     seoTitle: '',
@@ -628,6 +640,40 @@ export function MaterialFileManager() {
                 />
               </div>
 
+              <div>
+                <label className="block text-xs font-medium text-gray-600 mb-1">Основная картинка</label>
+                <input
+                  value={createForm.coverUrl}
+                  onChange={e => updateCreateForm('coverUrl', e.target.value)}
+                  placeholder="https://... или /images/cover.jpg"
+                  className="w-full px-3.5 py-2.5 border border-gray-300 rounded-xl text-sm outline-none focus:border-blue-400 focus:ring-2 focus:ring-blue-100"
+                />
+                <p className="text-xs text-gray-400 mt-1">Обложка карточки материала. Можно оставить пустым.</p>
+              </div>
+
+              <div>
+                <label className="block text-xs font-medium text-gray-600 mb-1">Ссылка на превью или видео</label>
+                <input
+                  value={createForm.previewFileUrl}
+                  onChange={e => updateCreateForm('previewFileUrl', e.target.value)}
+                  placeholder="https://... видео, презентация или PDF-превью"
+                  className="w-full px-3.5 py-2.5 border border-gray-300 rounded-xl text-sm outline-none focus:border-blue-400 focus:ring-2 focus:ring-blue-100"
+                />
+                <p className="text-xs text-gray-400 mt-1">Например ссылка на Rutube/YouTube/облако с предпросмотром.</p>
+              </div>
+
+              <div className="md:col-span-2">
+                <label className="block text-xs font-medium text-gray-600 mb-1">Текст превью</label>
+                <textarea
+                  value={createForm.previewText}
+                  onChange={e => updateCreateForm('previewText', e.target.value)}
+                  maxLength={1000}
+                  rows={2}
+                  placeholder="Что пользователь увидит до покупки или входа в подписку"
+                  className="w-full px-3.5 py-2.5 border border-gray-300 rounded-xl text-sm outline-none focus:border-blue-400 focus:ring-2 focus:ring-blue-100 resize-y"
+                />
+              </div>
+
               <div className="md:col-span-2">
                 <label className="block text-xs font-medium text-gray-600 mb-1">Полное описание</label>
                 <textarea
@@ -855,6 +901,40 @@ export function MaterialFileManager() {
                             onChange={e => updateMaterialForm('shortDescription', e.target.value)}
                             maxLength={500}
                             rows={2}
+                            className="w-full px-3.5 py-2.5 border border-gray-300 rounded-xl text-sm outline-none focus:border-blue-400 focus:ring-2 focus:ring-blue-100 resize-y"
+                          />
+                        </div>
+
+                        <div>
+                          <label className="block text-xs font-medium text-gray-600 mb-1">Основная картинка</label>
+                          <input
+                            value={materialForm.coverUrl}
+                            onChange={e => updateMaterialForm('coverUrl', e.target.value)}
+                            placeholder="https://... или /images/cover.jpg"
+                            className="w-full px-3.5 py-2.5 border border-gray-300 rounded-xl text-sm outline-none focus:border-blue-400 focus:ring-2 focus:ring-blue-100"
+                          />
+                          <p className="text-xs text-gray-400 mt-1">Обложка карточки материала. Можно загрузить файл ниже как «Обложка» или вставить ссылку.</p>
+                        </div>
+
+                        <div>
+                          <label className="block text-xs font-medium text-gray-600 mb-1">Ссылка на превью или видео</label>
+                          <input
+                            value={materialForm.previewFileUrl}
+                            onChange={e => updateMaterialForm('previewFileUrl', e.target.value)}
+                            placeholder="https://... видео, презентация или PDF-превью"
+                            className="w-full px-3.5 py-2.5 border border-gray-300 rounded-xl text-sm outline-none focus:border-blue-400 focus:ring-2 focus:ring-blue-100"
+                          />
+                          <p className="text-xs text-gray-400 mt-1">Ссылка на видео-предпросмотр или файл, который можно показать до покупки.</p>
+                        </div>
+
+                        <div className="md:col-span-2">
+                          <label className="block text-xs font-medium text-gray-600 mb-1">Текст превью</label>
+                          <textarea
+                            value={materialForm.previewText}
+                            onChange={e => updateMaterialForm('previewText', e.target.value)}
+                            maxLength={1000}
+                            rows={2}
+                            placeholder="Что пользователь увидит до покупки или входа в подписку"
                             className="w-full px-3.5 py-2.5 border border-gray-300 rounded-xl text-sm outline-none focus:border-blue-400 focus:ring-2 focus:ring-blue-100 resize-y"
                           />
                         </div>

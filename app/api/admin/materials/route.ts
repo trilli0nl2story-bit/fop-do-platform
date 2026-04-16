@@ -24,6 +24,20 @@ function cleanText(value: unknown, maxLength: number): string | null {
   return value.trim().slice(0, maxLength);
 }
 
+function cleanUrl(value: unknown, maxLength = 1000): string | null {
+  if (value === undefined || value === null || value === '') return '';
+  if (typeof value !== 'string') return null;
+  const trimmed = value.trim().slice(0, maxLength);
+  if (!trimmed) return '';
+  if (trimmed.startsWith('/')) return trimmed;
+  try {
+    const parsed = new URL(trimmed);
+    return parsed.protocol === 'http:' || parsed.protocol === 'https:' ? trimmed : null;
+  } catch {
+    return null;
+  }
+}
+
 function boolValue(value: unknown): boolean | null {
   return typeof value === 'boolean' ? value : null;
 }
@@ -92,6 +106,9 @@ function publicMaterial(row: {
   category_id: string | null;
   file_type: string;
   price: number | string;
+  cover_url: string;
+  preview_text: string;
+  preview_file_url: string;
   is_published: boolean;
   is_featured: boolean;
   seo_title: string;
@@ -109,6 +126,9 @@ function publicMaterial(row: {
     categoryId: row.category_id,
     fileType: row.file_type,
     priceRubles: Math.round(Number(row.price ?? 0)) / 100,
+    coverUrl: row.cover_url,
+    previewText: row.preview_text,
+    previewFileUrl: row.preview_file_url,
     isPublished: row.is_published,
     isFeatured: row.is_featured,
     seoTitle: row.seo_title,
@@ -210,6 +230,9 @@ export async function POST(request: Request) {
     const seoTitle = cleanText(body.seoTitle, 220);
     const seoDescription = cleanText(body.seoDescription, 500);
     const program = cleanText(body.program, 160);
+    const coverUrl = cleanUrl(body.coverUrl);
+    const previewText = cleanText(body.previewText, 1000);
+    const previewFileUrl = cleanUrl(body.previewFileUrl);
     const accessType = cleanText(body.accessType, 30);
     const fileType = cleanText(body.fileType, 10);
     const price = priceToKopecks(body.priceRubles);
@@ -227,6 +250,12 @@ export async function POST(request: Request) {
     }
     if (price === null) {
       return NextResponse.json({ error: 'Цена должна быть числом от 0 до 500000 рублей' }, { status: 400 });
+    }
+    if (coverUrl === null) {
+      return NextResponse.json({ error: 'Ссылка на основную картинку должна начинаться с http://, https:// или /' }, { status: 400 });
+    }
+    if (previewFileUrl === null) {
+      return NextResponse.json({ error: 'Ссылка на превью или видео должна начинаться с http://, https:// или /' }, { status: 400 });
     }
     if (isPublished === null || isFeatured === null) {
       return NextResponse.json({ error: 'Статусы должны быть включены или выключены' }, { status: 400 });
@@ -252,6 +281,9 @@ export async function POST(request: Request) {
       category_id: string | null;
       file_type: string;
       price: number | string;
+      cover_url: string;
+      preview_text: string;
+      preview_file_url: string;
       is_published: boolean;
       is_featured: boolean;
       seo_title: string;
@@ -261,12 +293,13 @@ export async function POST(request: Request) {
     }>(
       `INSERT INTO materials (
          slug, title, short_description, full_description, access_type, category_id,
-         file_type, price, is_published, is_featured, seo_title, seo_description,
-         program, updated_at
+         file_type, price, cover_url, preview_text, preview_file_url, is_published,
+         is_featured, seo_title, seo_description, program, updated_at
        )
-       VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, now())
+       VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, now())
        RETURNING id, slug, title, short_description, full_description, access_type,
-                 category_id, file_type, price, is_published, is_featured,
+                 category_id, file_type, price, cover_url, preview_text, preview_file_url,
+                 is_published, is_featured,
                  seo_title, seo_description, program, updated_at`,
       [
         slug,
@@ -277,6 +310,9 @@ export async function POST(request: Request) {
         categoryId,
         fileType,
         normalizedPrice,
+        coverUrl,
+        previewText ?? '',
+        previewFileUrl,
         isPublished,
         isFeatured,
         seoTitle ?? '',

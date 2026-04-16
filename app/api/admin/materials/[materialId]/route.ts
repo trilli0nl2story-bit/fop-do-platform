@@ -23,6 +23,20 @@ function cleanText(value: unknown, maxLength: number): string | null {
   return value.trim().slice(0, maxLength);
 }
 
+function cleanUrl(value: unknown, maxLength = 1000): string | null {
+  if (value === undefined || value === null || value === '') return '';
+  if (typeof value !== 'string') return null;
+  const trimmed = value.trim().slice(0, maxLength);
+  if (!trimmed) return '';
+  if (trimmed.startsWith('/')) return trimmed;
+  try {
+    const parsed = new URL(trimmed);
+    return parsed.protocol === 'http:' || parsed.protocol === 'https:' ? trimmed : null;
+  } catch {
+    return null;
+  }
+}
+
 function boolValue(value: unknown): boolean | null {
   return typeof value === 'boolean' ? value : null;
 }
@@ -55,6 +69,9 @@ function publicMaterial(row: {
   category_id: string | null;
   file_type: string;
   price: number | string;
+  cover_url: string;
+  preview_text: string;
+  preview_file_url: string;
   is_published: boolean;
   is_featured: boolean;
   seo_title: string;
@@ -72,6 +89,9 @@ function publicMaterial(row: {
     categoryId: row.category_id,
     fileType: row.file_type,
     priceRubles: Math.round(Number(row.price ?? 0)) / 100,
+    coverUrl: row.cover_url,
+    previewText: row.preview_text,
+    previewFileUrl: row.preview_file_url,
     isPublished: row.is_published,
     isFeatured: row.is_featured,
     seoTitle: row.seo_title,
@@ -108,6 +128,9 @@ export async function PATCH(request: Request, { params }: Params) {
       category_id: string | null;
       file_type: string;
       price: number | string;
+      cover_url: string;
+      preview_text: string;
+      preview_file_url: string;
       is_published: boolean;
       is_featured: boolean;
       seo_title: string;
@@ -116,6 +139,7 @@ export async function PATCH(request: Request, { params }: Params) {
       updated_at: string;
     }>(
       `SELECT id, slug, title, short_description, full_description, access_type, category_id, file_type,
+              cover_url, preview_text, preview_file_url,
               price, is_published, is_featured, seo_title, seo_description, program, updated_at
        FROM materials
        WHERE id = $1
@@ -135,6 +159,9 @@ export async function PATCH(request: Request, { params }: Params) {
     const seoTitle = cleanText(body.seoTitle, 220);
     const seoDescription = cleanText(body.seoDescription, 500);
     const program = cleanText(body.program, 160);
+    const coverUrl = cleanUrl(body.coverUrl);
+    const previewText = cleanText(body.previewText, 1000);
+    const previewFileUrl = cleanUrl(body.previewFileUrl);
     const accessType = cleanText(body.accessType, 30);
     const fileType = cleanText(body.fileType, 10);
     const price = priceToKopecks(body.priceRubles);
@@ -152,6 +179,12 @@ export async function PATCH(request: Request, { params }: Params) {
     }
     if (price === null) {
       return NextResponse.json({ error: 'Цена должна быть числом от 0 до 500000 рублей' }, { status: 400 });
+    }
+    if (coverUrl === null) {
+      return NextResponse.json({ error: 'Ссылка на основную картинку должна начинаться с http://, https:// или /' }, { status: 400 });
+    }
+    if (previewFileUrl === null) {
+      return NextResponse.json({ error: 'Ссылка на превью или видео должна начинаться с http://, https:// или /' }, { status: 400 });
     }
     if (isPublished === null || isFeatured === null) {
       return NextResponse.json({ error: 'Статусы должны быть включены или выключены' }, { status: 400 });
@@ -175,15 +208,19 @@ export async function PATCH(request: Request, { params }: Params) {
            category_id = $6,
            file_type = $7,
            price = $8,
-           is_published = $9,
-           is_featured = $10,
-           seo_title = $11,
-           seo_description = $12,
-           program = $13,
+           cover_url = $9,
+           preview_text = $10,
+           preview_file_url = $11,
+           is_published = $12,
+           is_featured = $13,
+           seo_title = $14,
+           seo_description = $15,
+           program = $16,
            updated_at = now()
        WHERE id = $1
        RETURNING id, slug, title, short_description, full_description, access_type, category_id, file_type,
-                 price, is_published, is_featured, seo_title, seo_description, program, updated_at`,
+                 price, cover_url, preview_text, preview_file_url, is_published, is_featured,
+                 seo_title, seo_description, program, updated_at`,
       [
         materialId,
         title,
@@ -193,6 +230,9 @@ export async function PATCH(request: Request, { params }: Params) {
         categoryId,
         fileType,
         normalizedPrice,
+        coverUrl,
+        previewText ?? '',
+        previewFileUrl,
         isPublished,
         isFeatured,
         seoTitle ?? '',
