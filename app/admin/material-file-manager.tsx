@@ -29,9 +29,16 @@ interface MaterialInfo {
   id: string;
   slug: string;
   title: string;
+  shortDescription: string;
+  fullDescription: string;
   accessType: string;
   fileType: string | null;
+  priceRubles: number;
   isPublished: boolean;
+  isFeatured: boolean;
+  seoTitle: string;
+  seoDescription: string;
+  program: string;
 }
 
 interface MaterialFileRow {
@@ -40,6 +47,20 @@ interface MaterialFileRow {
   storageKey: string;
   fileSize: number | null;
   createdAt: string;
+}
+
+interface MaterialForm {
+  title: string;
+  shortDescription: string;
+  fullDescription: string;
+  accessType: 'free' | 'subscription' | 'store';
+  fileType: 'PDF' | 'DOCX' | 'PPT' | 'PPTX';
+  priceRubles: string;
+  isPublished: boolean;
+  isFeatured: boolean;
+  seoTitle: string;
+  seoDescription: string;
+  program: string;
 }
 
 const accessLabels: Record<AccessFilter, string> = {
@@ -54,6 +75,37 @@ const fileRoleLabels: Record<FileRole, string> = {
   preview: 'Превью',
   cover: 'Обложка',
 };
+
+function materialToForm(material: MaterialInfo): MaterialForm {
+  const safeAccessType = ['free', 'subscription', 'store'].includes(material.accessType)
+    ? material.accessType
+    : 'store';
+  const safeFileType = material.fileType && ['PDF', 'DOCX', 'PPT', 'PPTX'].includes(material.fileType)
+    ? material.fileType
+    : 'PDF';
+
+  return {
+    title: material.title,
+    shortDescription: material.shortDescription ?? '',
+    fullDescription: material.fullDescription ?? '',
+    accessType: safeAccessType as MaterialForm['accessType'],
+    fileType: safeFileType as MaterialForm['fileType'],
+    priceRubles: String(material.priceRubles ?? 0),
+    isPublished: material.isPublished,
+    isFeatured: material.isFeatured,
+    seoTitle: material.seoTitle ?? '',
+    seoDescription: material.seoDescription ?? '',
+    program: material.program ?? '',
+  };
+}
+
+function normalizeFormForCompare(form: MaterialForm | null) {
+  if (!form) return '';
+  return JSON.stringify({
+    ...form,
+    priceRubles: form.accessType === 'store' ? Number(form.priceRubles || 0) : 0,
+  });
+}
 
 function formatDate(iso: string) {
   return new Date(iso).toLocaleString('ru-RU', {
@@ -85,6 +137,11 @@ export function MaterialFileManager() {
   const [materialsError, setMaterialsError] = useState('');
 
   const [selectedMaterial, setSelectedMaterial] = useState<MaterialInfo | null>(null);
+  const [materialForm, setMaterialForm] = useState<MaterialForm | null>(null);
+  const [saveLoading, setSaveLoading] = useState(false);
+  const [saveError, setSaveError] = useState('');
+  const [saveSuccess, setSaveSuccess] = useState('');
+  const [statusChangeConfirmed, setStatusChangeConfirmed] = useState(false);
   const [files, setFiles] = useState<MaterialFileRow[]>([]);
   const [detailsLoading, setDetailsLoading] = useState(false);
   const [detailsError, setDetailsError] = useState('');
@@ -144,6 +201,9 @@ export function MaterialFileManager() {
     setUploadSuccess('');
     setManualError('');
     setManualSuccess('');
+    setSaveError('');
+    setSaveSuccess('');
+    setStatusChangeConfirmed(false);
     setUploadFile(null);
     try {
       const res = await fetch(`/api/admin/material-files?materialSlug=${encodeURIComponent(slug)}`, {
@@ -152,11 +212,68 @@ export function MaterialFileManager() {
       const data = await res.json();
       if (!res.ok) throw new Error(data.error ?? 'Не удалось открыть материал');
       setSelectedMaterial(data.material);
+      setMaterialForm(materialToForm(data.material));
       setFiles(data.files ?? []);
     } catch (err) {
       setDetailsError(err instanceof Error ? err.message : 'Не удалось открыть материал');
     } finally {
       setDetailsLoading(false);
+    }
+  }
+
+  function updateMaterialForm<K extends keyof MaterialForm>(key: K, value: MaterialForm[K]) {
+    setMaterialForm(prev => {
+      if (!prev) return prev;
+      const next = { ...prev, [key]: value };
+      if (key === 'accessType' && value !== 'store') {
+        next.priceRubles = '0';
+      }
+      return next;
+    });
+    setSaveError('');
+    setSaveSuccess('');
+    setStatusChangeConfirmed(false);
+  }
+
+  async function handleSaveMaterial(e: React.FormEvent) {
+    e.preventDefault();
+    if (!selectedMaterial || !materialForm) return;
+
+    setSaveLoading(true);
+    setSaveError('');
+    setSaveSuccess('');
+    try {
+      const res = await fetch(`/api/admin/materials/${encodeURIComponent(selectedMaterial.id)}`, {
+        method: 'PATCH',
+        credentials: 'include',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          ...materialForm,
+          priceRubles: materialForm.accessType === 'store' ? Number(materialForm.priceRubles || 0) : 0,
+        }),
+      });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error ?? 'Не удалось сохранить изменения');
+
+      setSelectedMaterial(data.material);
+      setMaterialForm(materialToForm(data.material));
+      setStatusChangeConfirmed(false);
+      setSaveSuccess('Изменения сохранены');
+      setMaterials(prev => prev.map(item => (
+        item.id === data.material.id
+          ? {
+              ...item,
+              title: data.material.title,
+              accessType: data.material.accessType,
+              fileType: data.material.fileType,
+              isPublished: data.material.isPublished,
+            }
+          : item
+      )));
+    } catch (err) {
+      setSaveError(err instanceof Error ? err.message : 'Не удалось сохранить изменения');
+    } finally {
+      setSaveLoading(false);
     }
   }
 
@@ -242,6 +359,19 @@ export function MaterialFileManager() {
     if (!selectedMaterial) return 'Выберите материал слева';
     return selectedMaterial.title;
   }, [selectedMaterial]);
+
+  const savedForm = selectedMaterial ? materialToForm(selectedMaterial) : null;
+  const hasUnsavedChanges = normalizeFormForCompare(materialForm) !== normalizeFormForCompare(savedForm);
+  const publicationChanged = Boolean(
+    selectedMaterial &&
+    materialForm &&
+    selectedMaterial.isPublished !== materialForm.isPublished
+  );
+  const saveDisabled =
+    saveLoading ||
+    !hasUnsavedChanges ||
+    !materialForm?.title.trim() ||
+    (publicationChanged && !statusChangeConfirmed);
 
   return (
     <div className="space-y-5">
@@ -376,6 +506,202 @@ export function MaterialFileManager() {
 
               {selectedMaterial && (
                 <div className="space-y-5">
+                  {materialForm && (
+                    <form onSubmit={handleSaveMaterial} className="rounded-2xl border border-gray-200 bg-gray-50/60 p-4 space-y-4">
+                      <div className="flex flex-col sm:flex-row sm:items-start sm:justify-between gap-3">
+                        <div>
+                          <p className="text-sm font-semibold text-gray-900">Карточка материала</p>
+                          <p className="text-xs text-gray-500 mt-1">
+                            Изменения не сохраняются автоматически. Slug заблокирован, чтобы не сломать ссылки.
+                          </p>
+                        </div>
+                        {hasUnsavedChanges && (
+                          <span className="self-start text-xs px-2 py-1 rounded-full bg-amber-50 text-amber-700 font-semibold">
+                            есть несохранённые изменения
+                          </span>
+                        )}
+                      </div>
+
+                      <div className="grid md:grid-cols-2 gap-3">
+                        <div className="md:col-span-2">
+                          <label className="block text-xs font-medium text-gray-600 mb-1">Название *</label>
+                          <input
+                            value={materialForm.title}
+                            onChange={e => updateMaterialForm('title', e.target.value)}
+                            maxLength={220}
+                            className="w-full px-3.5 py-2.5 border border-gray-300 rounded-xl text-sm outline-none focus:border-blue-400 focus:ring-2 focus:ring-blue-100"
+                          />
+                        </div>
+
+                        <div>
+                          <label className="block text-xs font-medium text-gray-600 mb-1">Slug</label>
+                          <input
+                            value={selectedMaterial.slug}
+                            disabled
+                            className="w-full px-3.5 py-2.5 border border-gray-200 bg-white/70 rounded-xl text-sm font-mono text-gray-400"
+                          />
+                        </div>
+
+                        <div>
+                          <label className="block text-xs font-medium text-gray-600 mb-1">Программа</label>
+                          <input
+                            value={materialForm.program}
+                            onChange={e => updateMaterialForm('program', e.target.value)}
+                            maxLength={160}
+                            placeholder="Например: ФОП ДО"
+                            className="w-full px-3.5 py-2.5 border border-gray-300 rounded-xl text-sm outline-none focus:border-blue-400 focus:ring-2 focus:ring-blue-100"
+                          />
+                        </div>
+
+                        <div className="md:col-span-2">
+                          <label className="block text-xs font-medium text-gray-600 mb-1">Короткое описание</label>
+                          <textarea
+                            value={materialForm.shortDescription}
+                            onChange={e => updateMaterialForm('shortDescription', e.target.value)}
+                            maxLength={500}
+                            rows={2}
+                            className="w-full px-3.5 py-2.5 border border-gray-300 rounded-xl text-sm outline-none focus:border-blue-400 focus:ring-2 focus:ring-blue-100 resize-y"
+                          />
+                        </div>
+
+                        <div className="md:col-span-2">
+                          <label className="block text-xs font-medium text-gray-600 mb-1">Полное описание</label>
+                          <textarea
+                            value={materialForm.fullDescription}
+                            onChange={e => updateMaterialForm('fullDescription', e.target.value)}
+                            maxLength={5000}
+                            rows={4}
+                            className="w-full px-3.5 py-2.5 border border-gray-300 rounded-xl text-sm outline-none focus:border-blue-400 focus:ring-2 focus:ring-blue-100 resize-y"
+                          />
+                        </div>
+
+                        <div>
+                          <label className="block text-xs font-medium text-gray-600 mb-1">Тип доступа</label>
+                          <select
+                            value={materialForm.accessType}
+                            onChange={e => updateMaterialForm('accessType', e.target.value as MaterialForm['accessType'])}
+                            className="w-full px-3.5 py-2.5 border border-gray-300 rounded-xl text-sm bg-white outline-none focus:border-blue-400 focus:ring-2 focus:ring-blue-100"
+                          >
+                            <option value="store">Магазин</option>
+                            <option value="free">Бесплатный</option>
+                            <option value="subscription">По подписке</option>
+                          </select>
+                        </div>
+
+                        <div>
+                          <label className="block text-xs font-medium text-gray-600 mb-1">Тип файла</label>
+                          <select
+                            value={materialForm.fileType}
+                            onChange={e => updateMaterialForm('fileType', e.target.value as MaterialForm['fileType'])}
+                            className="w-full px-3.5 py-2.5 border border-gray-300 rounded-xl text-sm bg-white outline-none focus:border-blue-400 focus:ring-2 focus:ring-blue-100"
+                          >
+                            <option value="PDF">PDF</option>
+                            <option value="DOCX">DOCX</option>
+                            <option value="PPT">PPT</option>
+                            <option value="PPTX">PPTX</option>
+                          </select>
+                        </div>
+
+                        <div>
+                          <label className="block text-xs font-medium text-gray-600 mb-1">Цена, ₽</label>
+                          <input
+                            type="number"
+                            min={0}
+                            step="0.01"
+                            value={materialForm.priceRubles}
+                            onChange={e => updateMaterialForm('priceRubles', e.target.value)}
+                            disabled={materialForm.accessType !== 'store'}
+                            className="w-full px-3.5 py-2.5 border border-gray-300 rounded-xl text-sm outline-none focus:border-blue-400 focus:ring-2 focus:ring-blue-100 disabled:bg-gray-100 disabled:text-gray-400"
+                          />
+                          {materialForm.accessType !== 'store' && (
+                            <p className="text-xs text-gray-400 mt-1">Для бесплатных и подписочных материалов цена всегда 0 ₽.</p>
+                          )}
+                        </div>
+
+                        <div className="flex flex-col justify-end gap-2">
+                          <label className="inline-flex items-center gap-2 text-sm text-gray-700">
+                            <input
+                              type="checkbox"
+                              checked={materialForm.isPublished}
+                              onChange={e => updateMaterialForm('isPublished', e.target.checked)}
+                              className="w-4 h-4 rounded border-gray-300 text-blue-600"
+                            />
+                            Опубликован на сайте
+                          </label>
+                          <label className="inline-flex items-center gap-2 text-sm text-gray-700">
+                            <input
+                              type="checkbox"
+                              checked={materialForm.isFeatured}
+                              onChange={e => updateMaterialForm('isFeatured', e.target.checked)}
+                              className="w-4 h-4 rounded border-gray-300 text-blue-600"
+                            />
+                            Избранный материал
+                          </label>
+                        </div>
+
+                        <div>
+                          <label className="block text-xs font-medium text-gray-600 mb-1">SEO-заголовок</label>
+                          <input
+                            value={materialForm.seoTitle}
+                            onChange={e => updateMaterialForm('seoTitle', e.target.value)}
+                            maxLength={220}
+                            className="w-full px-3.5 py-2.5 border border-gray-300 rounded-xl text-sm outline-none focus:border-blue-400 focus:ring-2 focus:ring-blue-100"
+                          />
+                        </div>
+
+                        <div>
+                          <label className="block text-xs font-medium text-gray-600 mb-1">SEO-описание</label>
+                          <input
+                            value={materialForm.seoDescription}
+                            onChange={e => updateMaterialForm('seoDescription', e.target.value)}
+                            maxLength={500}
+                            className="w-full px-3.5 py-2.5 border border-gray-300 rounded-xl text-sm outline-none focus:border-blue-400 focus:ring-2 focus:ring-blue-100"
+                          />
+                        </div>
+                      </div>
+
+                      {publicationChanged && (
+                        <label className="flex items-start gap-2 rounded-xl border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-800">
+                          <input
+                            type="checkbox"
+                            checked={statusChangeConfirmed}
+                            onChange={e => setStatusChangeConfirmed(e.target.checked)}
+                            className="mt-0.5 w-4 h-4 rounded border-amber-300 text-amber-600"
+                          />
+                          <span>
+                            Я понимаю, что меняю видимость материала на сайте.
+                          </span>
+                        </label>
+                      )}
+
+                      <div className="rounded-xl border border-green-100 bg-green-50 px-4 py-3 text-xs text-green-800">
+                        Защита включена: сохраняет только администратор, slug нельзя случайно изменить, каждое сохранение пишется в журнал изменений.
+                      </div>
+
+                      {saveError && (
+                        <div className="flex items-center gap-2 text-sm text-red-600 bg-red-50 border border-red-100 rounded-xl px-4 py-3">
+                          <AlertCircle className="w-4 h-4 flex-shrink-0" />
+                          {saveError}
+                        </div>
+                      )}
+                      {saveSuccess && (
+                        <div className="flex items-center gap-2 text-sm text-green-700 bg-green-50 border border-green-100 rounded-xl px-4 py-3">
+                          <CheckCircle2 className="w-4 h-4 flex-shrink-0" />
+                          {saveSuccess}
+                        </div>
+                      )}
+
+                      <button
+                        type="submit"
+                        disabled={saveDisabled}
+                        className="inline-flex items-center gap-2 px-5 py-2.5 bg-gray-900 hover:bg-gray-800 text-white text-sm font-semibold rounded-xl transition-colors disabled:opacity-50"
+                      >
+                        {saveLoading ? <Loader2 className="w-4 h-4 animate-spin" /> : <CheckCircle2 className="w-4 h-4" />}
+                        {saveLoading ? 'Сохранение...' : 'Сохранить изменения'}
+                      </button>
+                    </form>
+                  )}
+
                   <div>
                     <p className="text-xs font-semibold text-gray-500 uppercase tracking-wide mb-3">
                       Подключённые файлы ({files.length})

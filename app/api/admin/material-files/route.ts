@@ -29,9 +29,13 @@ export async function GET(request: Request) {
 
     const matResult = await query<{
       id: string; slug: string; title: string;
-      access_type: string; file_type: string | null; is_published: boolean;
+      short_description: string; full_description: string;
+      access_type: string; file_type: string | null; price: number | string;
+      is_published: boolean; is_featured: boolean;
+      seo_title: string; seo_description: string; program: string;
     }>(
-      `SELECT id, slug, title, access_type, file_type, is_published
+      `SELECT id, slug, title, short_description, full_description, access_type,
+              file_type, price, is_published, is_featured, seo_title, seo_description, program
        FROM materials WHERE slug = $1 LIMIT 1`,
       [slug.trim()]
     );
@@ -59,9 +63,16 @@ export async function GET(request: Request) {
         id: material.id,
         slug: material.slug,
         title: material.title,
+        shortDescription: material.short_description,
+        fullDescription: material.full_description,
         accessType: material.access_type,
         fileType: material.file_type,
+        priceRubles: Math.round(Number(material.price ?? 0)) / 100,
         isPublished: material.is_published,
+        isFeatured: material.is_featured,
+        seoTitle: material.seo_title,
+        seoDescription: material.seo_description,
+        program: material.program,
       },
       files: filesResult.rows.map(r => ({
         id: r.id,
