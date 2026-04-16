@@ -411,8 +411,14 @@ export function KabinetClient() {
             <p className="text-xs font-semibold text-amber-600 uppercase tracking-wide mb-3">Администрирование</p>
             <div className="flex flex-wrap gap-2">
               <Link
-                href="/admin/material-files"
+                href="/admin"
                 className="inline-flex items-center gap-1.5 px-4 py-2 bg-amber-500 hover:bg-amber-600 text-white text-sm font-medium rounded-xl transition-colors"
+              >
+                Панель администратора
+              </Link>
+              <Link
+                href="/admin/material-files"
+                className="inline-flex items-center gap-1.5 px-4 py-2 border border-amber-200 hover:border-amber-300 text-amber-700 text-sm font-medium rounded-xl transition-colors"
               >
                 Файлы материалов
               </Link>

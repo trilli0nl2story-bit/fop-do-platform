@@ -1,5 +1,14 @@
-import { redirect } from 'next/navigation';
+import type { Metadata } from 'next';
+import { AdminClient } from './client';
+
+export const metadata: Metadata = {
+  title: 'Администрирование',
+  robots: {
+    index: false,
+    follow: false,
+  },
+};
 
 export default function AdminPage() {
-  redirect('/admin/material-files');
+  return <AdminClient />;
 }
