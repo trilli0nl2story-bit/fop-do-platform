@@ -178,7 +178,15 @@ export function StoreProductDetail({ slug, onNavigate, isAuthenticated = true }:
   }, [localProduct, slug]);
 
   const handleAddUpsell = (rp: RelatedProduct['product']) => {
-    addItem({ id: rp.id, title: rp.title, category: rp.category, price: rp.price, fileType: rp.fileType });
+    addItem({
+      id: rp.id,
+      slug: rp.slug,
+      materialId: rp.materialId,
+      title: rp.title,
+      category: rp.category,
+      price: rp.price,
+      fileType: rp.fileType,
+    });
     setAddedItems(prev => new Set(prev).add(rp.id));
   };
 
@@ -205,7 +213,17 @@ export function StoreProductDetail({ slug, onNavigate, isAuthenticated = true }:
 
   const handleAddToCart = () => {
     if (!isAuthenticated) { onNavigate('register'); return; }
-    if (!isInCart) addItem({ id: product.id, title: product.title, category: product.category, price: product.price, fileType: product.fileType });
+    if (!isInCart) {
+      addItem({
+        id: product.id,
+        slug: product.slug,
+        materialId: product.materialId,
+        title: product.title,
+        category: product.category,
+        price: product.price,
+        fileType: product.fileType,
+      });
+    }
   };
 
   const forWhom = getForWhom(product);

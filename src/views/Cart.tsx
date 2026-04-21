@@ -1,10 +1,9 @@
-import { useState } from 'react';
-import { ShoppingCart, Trash2, Tag, FileText, CreditCard, Crown, Gift, AlertCircle } from 'lucide-react';
+import { useEffect, useMemo, useState } from 'react';
+import { AlertCircle, Check, Clock3, CreditCard, FileText, ShoppingCart, Tag, Trash2 } from 'lucide-react';
 import { Card } from '../components/Card';
 import { Button } from '../components/Button';
-import { ConsentCheckbox } from '../components/ConsentCheckbox';
+import { Input } from '../components/Input';
 import { useCart } from '../context/CartContext';
-import { usePostPurchaseDiscount } from '../context/PostPurchaseDiscountContext';
 
 interface CartProps {
   onNavigate: (page: string) => void;
@@ -15,27 +14,54 @@ interface CartProps {
 const fileTypeColors: Record<string, string> = {
   PDF: 'bg-red-50 text-red-600',
   DOCX: 'bg-blue-50 text-blue-600',
-  PPT: 'bg-orange-50 text-orange-600'
+  PPT: 'bg-orange-50 text-orange-600',
+  PPTX: 'bg-orange-50 text-orange-600',
 };
 
-export function Cart({ onNavigate, hasSubscription = false }: CartProps) {
-  const { items, removeItem, clearCart, total } = useCart();
-  const { discount, grantDiscount, applyDiscount } = usePostPurchaseDiscount();
-  const [consentGiven, setConsentGiven] = useState(false);
+function unavailableMessage(reason: 'not_found' | 'not_store' | 'not_published') {
+  if (reason === 'not_store') return 'Материал больше не продаётся отдельно.';
+  if (reason === 'not_published') return 'Материал временно снят с публикации.';
+  return 'Материал не найден в каталоге.';
+}
 
-  const subscriptionDiscount = hasSubscription ? Math.round(total * 0.25) : 0;
-  const potentialSavings = Math.round(total * 0.25);
+export function Cart({ onNavigate }: CartProps) {
+  const {
+    items,
+    removeItem,
+    clearCart,
+    total,
+    quote,
+    quoteLoading,
+    quoteError,
+    referralCode,
+    setReferralCode,
+  } = useCart();
+  const [referralDraft, setReferralDraft] = useState(referralCode);
 
-  const activeReturnDiscount = (!hasSubscription && discount && !discount.used) ? discount.discountAmount : 0;
-  const finalTotal = Math.max(0, total - subscriptionDiscount - activeReturnDiscount);
+  useEffect(() => {
+    setReferralDraft(referralCode);
+  }, [referralCode]);
 
-  const handlePayment = () => {
-    const orderTotal = total;
-    if (activeReturnDiscount > 0) applyDiscount();
-    grantDiscount(orderTotal);
-    clearCart();
-    onNavigate('payment_creating');
-    window.setTimeout(() => onNavigate('payment_success_product'), 1800);
+  const quoteItemsBySlug = useMemo(() => {
+    const map = new Map<string, NonNullable<typeof quote>['items'][number]>();
+    for (const item of quote?.items ?? []) {
+      map.set(item.slug, item);
+    }
+    return map;
+  }, [quote]);
+
+  const displayItems = items.map((item) => {
+    const quoted = item.slug ? quoteItemsBySlug.get(item.slug) : null;
+    return {
+      ...item,
+      quote: quoted ?? null,
+    };
+  });
+
+  const hasUnavailableItems = displayItems.some((item) => item.quote && !item.quote.available);
+
+  const handleApplyReferral = () => {
+    setReferralCode(referralDraft.trim());
   };
 
   if (items.length === 0) {
@@ -45,7 +71,7 @@ export function Cart({ onNavigate, hasSubscription = false }: CartProps) {
           <ShoppingCart className="w-10 h-10 text-gray-400" />
         </div>
         <h2 className="text-2xl font-bold text-gray-900 mb-3">Корзина пуста</h2>
-        <p className="text-gray-600 mb-6">Добавьте материалы из библиотеки документов</p>
+        <p className="text-gray-600 mb-6">Добавьте материалы из магазина, и мы сразу пересчитаем итоговую сумму на сервере.</p>
         <Button onClick={() => onNavigate('store-materials')}>
           Перейти в магазин
         </Button>
@@ -57,100 +83,140 @@ export function Cart({ onNavigate, hasSubscription = false }: CartProps) {
     <div className="max-w-5xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
       <div className="mb-8">
         <h1 className="text-3xl font-bold text-gray-900 mb-2">Корзина</h1>
-        <p className="text-gray-600">{items.length} {items.length === 1 ? 'документ' : 'документа'}</p>
+        <p className="text-gray-600">
+          {items.length} {items.length === 1 ? 'материал' : items.length < 5 ? 'материала' : 'материалов'}
+        </p>
       </div>
 
       <div className="grid lg:grid-cols-3 gap-6">
         <div className="lg:col-span-2 space-y-4">
-          {items.map(item => (
-            <Card key={item.id} hover={false}>
-              <div className="flex items-start gap-4">
-                <div className="w-12 h-12 rounded-lg bg-gray-50 flex items-center justify-center flex-shrink-0">
-                  <FileText className="w-6 h-6 text-gray-500" />
-                </div>
-                <div className="flex-1 min-w-0">
-                  <h3 className="font-semibold text-gray-900 mb-1">{item.title}</h3>
-                  <div className="flex items-center gap-2">
-                    <span className="text-sm text-gray-600">{item.category}</span>
-                    <span className={`text-xs font-semibold px-2 py-0.5 rounded-full ${fileTypeColors[item.fileType]}`}>
-                      {item.fileType}
-                    </span>
+          {quoteError && (
+            <div className="rounded-xl border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-800">
+              {quoteError}
+            </div>
+          )}
+
+          {displayItems.map((item) => {
+            const quoted = item.quote;
+            const unavailable = quoted && !quoted.available;
+
+            return (
+              <Card key={item.id} hover={false}>
+                <div className="flex items-start gap-4">
+                  <div className="w-12 h-12 rounded-lg bg-gray-50 flex items-center justify-center flex-shrink-0">
+                    <FileText className="w-6 h-6 text-gray-500" />
                   </div>
-                </div>
-                <div className="flex items-center gap-3 flex-shrink-0">
-                  <div className="text-right">
-                    {hasSubscription && (
-                      <span className="text-sm text-gray-400 line-through block">{item.price} ₽</span>
+                  <div className="flex-1 min-w-0">
+                    <h3 className="font-semibold text-gray-900 mb-1">{quoted?.title ?? item.title}</h3>
+                    <div className="flex items-center gap-2 flex-wrap">
+                      <span className="text-sm text-gray-600">{quoted?.category ?? item.category}</span>
+                      <span className={`text-xs font-semibold px-2 py-0.5 rounded-full ${fileTypeColors[quoted?.fileType ?? item.fileType]}`}>
+                        {quoted?.fileType ?? item.fileType}
+                      </span>
+                    </div>
+
+                    {unavailable && quoted.reason !== 'ok' && (
+                      <div className="mt-3 inline-flex items-start gap-2 rounded-lg border border-red-200 bg-red-50 px-3 py-2 text-xs text-red-700">
+                        <AlertCircle className="w-4 h-4 flex-shrink-0 mt-0.5" />
+                        <span>{unavailableMessage(quoted.reason)}</span>
+                      </div>
                     )}
-                    <span className="font-bold text-gray-900 text-lg">
-                      {hasSubscription ? Math.round(item.price * 0.75) : item.price} ₽
-                    </span>
                   </div>
-                  <button
-                    onClick={() => removeItem(item.id)}
-                    className="w-8 h-8 flex items-center justify-center text-gray-400 hover:text-red-500 hover:bg-red-50 rounded-lg transition-colors"
-                  >
-                    <Trash2 className="w-4 h-4" />
-                  </button>
+
+                  <div className="flex items-center gap-3 flex-shrink-0">
+                    <div className="text-right">
+                      {quoteLoading && !quoted ? (
+                        <span className="text-sm text-gray-400 block">Пересчёт...</span>
+                      ) : quoted ? (
+                        <>
+                          {quoted.discountAmountRubles > 0 && (
+                            <span className="text-sm text-gray-400 line-through block">
+                              {quoted.unitPriceRubles.toLocaleString('ru-RU')} ₽
+                            </span>
+                          )}
+                          <span className={`font-bold text-lg ${unavailable ? 'text-gray-400' : 'text-gray-900'}`}>
+                            {quoted.finalPriceRubles.toLocaleString('ru-RU')} ₽
+                          </span>
+                        </>
+                      ) : (
+                        <span className="font-bold text-gray-900 text-lg">
+                          {item.price.toLocaleString('ru-RU')} ₽
+                        </span>
+                      )}
+                    </div>
+
+                    <button
+                      onClick={() => removeItem(item.id)}
+                      className="w-8 h-8 flex items-center justify-center text-gray-400 hover:text-red-500 hover:bg-red-50 rounded-lg transition-colors"
+                    >
+                      <Trash2 className="w-4 h-4" />
+                    </button>
+                  </div>
                 </div>
-              </div>
-            </Card>
-          ))}
+              </Card>
+            );
+          })}
         </div>
 
         <div className="lg:col-span-1">
           <Card hover={false} className="sticky top-20">
             <h3 className="font-semibold text-gray-900 mb-4 text-lg">Итого</h3>
 
-            <div className="space-y-3 mb-4">
-              <div className="flex justify-between text-gray-700">
-                <span>Документы ({items.length} шт.)</span>
-                <span>{total} ₽</span>
+            <div className="space-y-4 mb-5">
+              <div className="space-y-2">
+                <label className="text-sm font-medium text-gray-700">Реферальный код</label>
+                <div className="flex gap-2">
+                  <Input
+                    value={referralDraft}
+                    onChange={(event) => setReferralDraft(event.target.value)}
+                    placeholder="Например, ABC123"
+                    className="py-2.5"
+                  />
+                  <Button variant="secondary" onClick={handleApplyReferral}>
+                    Применить
+                  </Button>
+                </div>
+                {quote?.referral.message && (
+                  <p className={`text-xs ${quote.referral.applied ? 'text-green-600' : 'text-amber-700'}`}>
+                    {quote.referral.message}
+                  </p>
+                )}
               </div>
 
-              {hasSubscription && (
-                <div className="flex items-center justify-between text-green-600 p-3 bg-green-50 border border-green-200 rounded-lg">
+              <div className="flex justify-between text-gray-700">
+                <span>Материалы ({items.length} шт.)</span>
+                <span>{quote?.subtotalRubles.toLocaleString('ru-RU') ?? total.toLocaleString('ru-RU')} ₽</span>
+              </div>
+
+              {quoteLoading && (
+                <div className="flex items-center gap-2 text-sm text-gray-500">
+                  <Clock3 className="w-4 h-4" />
+                  <span>Пересчитываем корзину на сервере...</span>
+                </div>
+              )}
+
+              {quote?.discounts.map((discount) => (
+                <div key={discount.code} className="flex items-center justify-between text-green-700 p-3 bg-green-50 border border-green-200 rounded-lg">
                   <div className="flex items-center gap-1.5">
                     <Tag className="w-4 h-4" />
-                    <span className="text-sm font-medium">Скидка подписки −25%</span>
+                    <span className="text-sm font-medium">
+                      {discount.label} −{discount.appliedPercent}%
+                    </span>
                   </div>
-                  <span className="font-semibold">−{subscriptionDiscount} ₽</span>
+                  <span className="font-semibold">−{discount.amountRubles.toLocaleString('ru-RU')} ₽</span>
+                </div>
+              ))}
+
+              {quote && quote.totalDiscountPercent > 0 && (
+                <div className="rounded-lg border border-blue-200 bg-blue-50 px-3 py-2 text-xs text-blue-800">
+                  Общая скидка на корзину: <span className="font-semibold">{quote.totalDiscountPercent}%</span>.
+                  Максимум по правилам проекта — {quote.maxDiscountPercent}%.
                 </div>
               )}
 
-              {activeReturnDiscount > 0 && (
-                <div className="flex items-center justify-between text-amber-700 p-3 bg-amber-50 border border-amber-200 rounded-lg">
-                  <div className="flex items-center gap-1.5">
-                    <Gift className="w-4 h-4" />
-                    <span className="text-sm font-medium">Скидка применена</span>
-                  </div>
-                  <span className="font-semibold">−{activeReturnDiscount} ₽</span>
-                </div>
-              )}
-
-              {hasSubscription && discount && !discount.used && (
-                <div className="flex items-center gap-2 p-3 bg-gray-50 border border-gray-200 rounded-lg">
-                  <AlertCircle className="w-4 h-4 text-gray-400 flex-shrink-0" />
-                  <p className="text-xs text-gray-500">У вас уже действует максимальная скидка 25%</p>
-                </div>
-              )}
-
-              {!hasSubscription && !activeReturnDiscount && (
-                <div className="p-3 bg-amber-50 border border-amber-200 rounded-lg">
-                  <div className="flex items-center gap-2 mb-1.5">
-                    <Crown className="w-4 h-4 text-amber-600" />
-                    <p className="text-sm text-amber-800 font-semibold">С подпиской выгоднее</p>
-                  </div>
-                  <p className="text-xs text-amber-700 mb-1">Скидка 25% на все материалы магазина</p>
-                  <p className="text-xs text-amber-800 font-semibold">
-                    С этим заказом: −{potentialSavings} ₽
-                  </p>
-                  <button
-                    onClick={() => onNavigate('subscription')}
-                    className="mt-2 text-xs font-medium text-amber-700 hover:text-amber-800 underline"
-                  >
-                    Получить скидку 25%
-                  </button>
+              {hasUnavailableItems && (
+                <div className="rounded-lg border border-red-200 bg-red-50 px-3 py-2 text-xs text-red-700">
+                  В корзине есть материалы, которые сейчас нельзя купить. Удалите их, и расчёт снова станет доступен для оформления.
                 </div>
               )}
             </div>
@@ -158,28 +224,33 @@ export function Cart({ onNavigate, hasSubscription = false }: CartProps) {
             <div className="border-t border-gray-200 pt-4 mb-5">
               <div className="flex justify-between items-center">
                 <span className="font-semibold text-gray-900 text-lg">К оплате</span>
-                <span className="font-bold text-2xl text-gray-900">{finalTotal} ₽</span>
+                <span className="font-bold text-2xl text-gray-900">
+                  {(quote?.totalRubles ?? total).toLocaleString('ru-RU')} ₽
+                </span>
               </div>
             </div>
 
-            <div className="mb-4">
-              <ConsentCheckbox
-                checked={consentGiven}
-                onChange={setConsentGiven}
-                onNavigate={onNavigate}
-              />
-            </div>
-
-            <Button className="w-full" size="lg" disabled={!consentGiven} onClick={handlePayment}>
+            <Button className="w-full" size="lg" disabled>
               <CreditCard className="w-5 h-5" />
-              Оплатить
+              Оплата через Prodamus скоро подключится
             </Button>
+
+            <p className="mt-3 text-xs text-gray-500 leading-relaxed">
+              Мы уже перевели корзину на серверный пересчёт. Следующим шагом подключаем создание заказа и оплату через Prodamus, чтобы сумма и скидки подтверждались уже при оформлении.
+            </p>
 
             <button
               onClick={() => onNavigate('store-materials')}
               className="w-full text-center text-sm text-blue-500 hover:text-blue-600 mt-3 py-2"
             >
               Продолжить покупки
+            </button>
+
+            <button
+              onClick={clearCart}
+              className="w-full text-center text-sm text-gray-500 hover:text-gray-700 mt-1 py-2"
+            >
+              Очистить корзину
             </button>
           </Card>
         </div>

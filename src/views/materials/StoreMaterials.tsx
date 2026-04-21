@@ -349,6 +349,8 @@ export function StoreMaterials({ onNavigate, isAuthenticated = true }: StoreMate
     if (!isInCart(product.id)) {
       addItem({
         id: product.id,
+        slug: product.slug,
+        materialId: product.materialId,
         title: product.title,
         category: product.category,
         price: product.price,

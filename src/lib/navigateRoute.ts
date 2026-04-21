@@ -8,6 +8,7 @@ export function resolveRoute(page: string): string {
   if (page === 'forgot-password') return '/vosstanovlenie-parolya';
   if (page === 'dashboard') return '/kabinet';
   if (page === 'profile') return '/kabinet';
+  if (page === 'cart') return '/korzina';
   if (page === 'materials-hub' || page.startsWith('materials-hub/')) return '/materialy';
   if (page === 'free-materials') return '/materialy/besplatno';
   if (page === 'subscription-materials') return '/materialy/podpiska';
