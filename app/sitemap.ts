@@ -1,8 +1,9 @@
 import type { MetadataRoute } from 'next';
 import { storeProducts } from '../src/data/storeProducts';
 import { siteUrl } from '../src/lib/siteConfig';
+import { getPublishedStoreMaterials } from '../src/server/publicStore';
 
-export default function sitemap(): MetadataRoute.Sitemap {
+export default async function sitemap(): Promise<MetadataRoute.Sitemap> {
   const now = new Date();
 
   const staticRoutes: MetadataRoute.Sitemap = [
@@ -52,9 +53,24 @@ export default function sitemap(): MetadataRoute.Sitemap {
     priority: 0.4,
   }));
 
-  const productRoutes: MetadataRoute.Sitemap = storeProducts.map((p) => ({
-    url: `${siteUrl}/materialy/magazin/${p.slug}`,
-    lastModified: now,
+  let dbProducts: Awaited<ReturnType<typeof getPublishedStoreMaterials>> = [];
+  try {
+    dbProducts = await getPublishedStoreMaterials(1000);
+  } catch {
+    dbProducts = [];
+  }
+
+  const productSlugs = new Map<string, Date>();
+  for (const product of storeProducts) {
+    productSlugs.set(product.slug, now);
+  }
+  for (const product of dbProducts) {
+    productSlugs.set(product.slug, product.updatedAt ? new Date(product.updatedAt) : now);
+  }
+
+  const productRoutes: MetadataRoute.Sitemap = Array.from(productSlugs.entries()).map(([slug, lastModified]) => ({
+    url: `${siteUrl}/materialy/magazin/${slug}`,
+    lastModified,
     changeFrequency: 'monthly',
     priority: 0.7,
   }));

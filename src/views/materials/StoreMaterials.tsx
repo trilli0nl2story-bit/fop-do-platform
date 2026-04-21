@@ -13,6 +13,7 @@ import { getPopularityLabel } from '../../data/notifications';
 interface StoreMaterialsProps {
   onNavigate: (page: string) => void;
   isAuthenticated?: boolean;
+  initialProducts?: StoreProduct[];
 }
 
 const fileTypeColors: Record<string, string> = {
@@ -245,13 +246,17 @@ function formatHoursRemaining(expiresAt: Date): string {
   return `${hours} часов`;
 }
 
-export function StoreMaterials({ onNavigate, isAuthenticated = true }: StoreMaterialsProps) {
+export function StoreMaterials({
+  onNavigate,
+  isAuthenticated = true,
+  initialProducts = [],
+}: StoreMaterialsProps) {
   const [search, setSearch] = useState('');
   const [category, setCategory] = useState('Все категории');
   const [ktpMonth, setKtpMonth] = useState('Все месяцы');
   const [ktpAge, setKtpAge] = useState('Все возраста');
   const [activeUseCase, setActiveUseCase] = useState<string | null>(null);
-  const [dbProducts, setDbProducts] = useState<StoreProduct[]>([]);
+  const [dbProducts, setDbProducts] = useState<StoreProduct[]>(initialProducts);
   const { addItem, items } = useCart();
   const { discount, hoursRemaining } = usePostPurchaseDiscount();
   const hasActiveDiscount = discount && !discount.used;

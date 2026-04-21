@@ -12,3 +12,5 @@ export const siteUrl: string =
   'https://metodcab.replit.app';
 
 export const siteName = 'Методический кабинет педагога';
+export const siteDescription =
+  'Готовые методические материалы для воспитателей и педагогов дошкольных учреждений: конспекты занятий, КТП, рабочие программы и подписка по ФОП ДО.';

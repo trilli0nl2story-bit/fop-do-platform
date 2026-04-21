@@ -1,13 +1,25 @@
 import type { Metadata } from 'next';
-import { siteUrl, siteName } from '../src/lib/siteConfig';
+import { siteDescription, siteUrl, siteName } from '../src/lib/siteConfig';
 import './globals.css';
 
 export const metadata: Metadata = {
   metadataBase: new URL(siteUrl),
   title: siteName,
-  description:
-    'Готовые методические материалы для воспитателей и педагогов дошкольных учреждений — конспекты занятий, КТП, рабочие программы по ФОП ДО.',
+  description: siteDescription,
   alternates: { canonical: '/' },
+  openGraph: {
+    type: 'website',
+    locale: 'ru_RU',
+    url: siteUrl,
+    siteName,
+    title: siteName,
+    description: siteDescription,
+  },
+  twitter: {
+    card: 'summary_large_image',
+    title: siteName,
+    description: siteDescription,
+  },
 };
 
 export default function RootLayout({

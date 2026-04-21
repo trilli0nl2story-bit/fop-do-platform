@@ -6,12 +6,14 @@ import { PostPurchaseDiscountProvider } from '../../../../src/context/PostPurcha
 import { Header } from '../../../../src/components/Header';
 import { StoreProductDetail } from '../../../../src/views/materials/StoreProductDetail';
 import { resolveRoute } from '../../../../src/lib/navigateRoute';
+import type { StoreProduct } from '../../../../src/data/storeProducts';
 
 interface ProductDetailClientProps {
   slug: string;
+  initialProduct?: StoreProduct | null;
 }
 
-export function ProductDetailClient({ slug }: ProductDetailClientProps) {
+export function ProductDetailClient({ slug, initialProduct = null }: ProductDetailClientProps) {
   const router = useRouter();
 
   function onNavigate(page: string) {
@@ -22,7 +24,12 @@ export function ProductDetailClient({ slug }: ProductDetailClientProps) {
     <CartProvider>
       <PostPurchaseDiscountProvider>
         <Header currentPage="store-materials" onNavigate={onNavigate} isAuthenticated={false} />
-        <StoreProductDetail slug={slug} onNavigate={onNavigate} isAuthenticated={false} />
+        <StoreProductDetail
+          slug={slug}
+          onNavigate={onNavigate}
+          isAuthenticated={false}
+          initialProduct={initialProduct}
+        />
       </PostPurchaseDiscountProvider>
     </CartProvider>
   );

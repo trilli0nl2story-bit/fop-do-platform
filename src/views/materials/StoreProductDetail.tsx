@@ -18,6 +18,7 @@ interface StoreProductDetailProps {
   slug: string;
   onNavigate: (page: string) => void;
   isAuthenticated?: boolean;
+  initialProduct?: StoreProduct | null;
 }
 
 const fileTypeColors: Record<string, string> = {
@@ -140,12 +141,17 @@ function Accordion({ title, icon, children }: { title: string; icon: React.React
   );
 }
 
-export function StoreProductDetail({ slug, onNavigate, isAuthenticated = true }: StoreProductDetailProps) {
+export function StoreProductDetail({
+  slug,
+  onNavigate,
+  isAuthenticated = true,
+  initialProduct = null,
+}: StoreProductDetailProps) {
   const [showPreview, setShowPreview] = useState(false);
   const [addedItems, setAddedItems] = useState<Set<number>>(new Set());
   const [subscriptionActivated, setSubscriptionActivated] = useState(false);
   const [detailsOpen, setDetailsOpen] = useState(false);
-  const [dbProduct, setDbProduct] = useState<StoreProduct | null>(null);
+  const [dbProduct, setDbProduct] = useState<StoreProduct | null>(initialProduct);
   const [dbProductLoading, setDbProductLoading] = useState(false);
   const [downloadCount] = useState(() => randomDownloadCount());
 
@@ -155,7 +161,7 @@ export function StoreProductDetail({ slug, onNavigate, isAuthenticated = true }:
   const relatedProducts: RelatedProduct[] = product ? getRelatedProducts(product) : [];
 
   useEffect(() => {
-    if (localProduct) return;
+    if (localProduct || initialProduct) return;
     let cancelled = false;
     setDbProductLoading(true);
 
@@ -175,7 +181,7 @@ export function StoreProductDetail({ slug, onNavigate, isAuthenticated = true }:
     return () => {
       cancelled = true;
     };
-  }, [localProduct, slug]);
+  }, [initialProduct, localProduct, slug]);
 
   const handleAddUpsell = (rp: RelatedProduct['product']) => {
     addItem({
