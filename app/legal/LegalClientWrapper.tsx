@@ -5,6 +5,7 @@ import { CartProvider } from '../../src/context/CartContext';
 import { PostPurchaseDiscountProvider } from '../../src/context/PostPurchaseDiscountContext';
 import { Header } from '../../src/components/Header';
 import { resolveRoute } from '../../src/lib/navigateRoute';
+import { useAuthSession } from '../../src/hooks/useAuthSession';
 import { Offer } from '../../src/views/legal/Offer';
 import { Privacy } from '../../src/views/legal/Privacy';
 import { Terms } from '../../src/views/legal/Terms';
@@ -27,6 +28,7 @@ interface LegalClientWrapperProps {
 
 export function LegalClientWrapper({ slug }: LegalClientWrapperProps) {
   const router = useRouter();
+  const { isAuthenticated } = useAuthSession();
 
   function onNavigate(page: string) {
     router.push(resolveRoute(page));
@@ -38,7 +40,7 @@ export function LegalClientWrapper({ slug }: LegalClientWrapperProps) {
   return (
     <CartProvider>
       <PostPurchaseDiscountProvider>
-        <Header currentPage="legal" onNavigate={onNavigate} isAuthenticated={false} />
+        <Header currentPage="legal" onNavigate={onNavigate} isAuthenticated={isAuthenticated} />
         <View onNavigate={onNavigate} />
       </PostPurchaseDiscountProvider>
     </CartProvider>

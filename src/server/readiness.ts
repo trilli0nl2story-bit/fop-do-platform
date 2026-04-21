@@ -20,6 +20,10 @@ export interface ReadinessSummary {
   checks: ReadinessCheck[];
 }
 
+function normalizeUrl(value: string): string {
+  return value.trim().replace(/\/+$/, '');
+}
+
 function hasSessionSecret(): boolean {
   return Boolean(process.env.SESSION_SECRET?.trim());
 }
@@ -28,8 +32,32 @@ function hasAppOrigin(): boolean {
   return Boolean(process.env.APP_ORIGIN?.trim());
 }
 
+function getConfiguredPublicSiteUrl(): string {
+  return process.env.NEXT_PUBLIC_SITE_URL?.trim() || process.env.SITE_URL?.trim() || '';
+}
+
+function hasPublicSiteUrl(): boolean {
+  return Boolean(getConfiguredPublicSiteUrl());
+}
+
+function doesPublicSiteUrlMatchAppOrigin(): boolean {
+  const appOrigin = process.env.APP_ORIGIN?.trim();
+  const publicSiteUrl = getConfiguredPublicSiteUrl();
+
+  if (!appOrigin || !publicSiteUrl) return false;
+  return normalizeUrl(appOrigin) === normalizeUrl(publicSiteUrl);
+}
+
 export async function getReleaseReadinessSummary(): Promise<ReadinessSummary> {
   const databaseReady = await ping();
+  const appOriginConfigured = hasAppOrigin();
+  const publicSiteUrlConfigured = hasPublicSiteUrl();
+  const siteOriginMatch = doesPublicSiteUrlMatchAppOrigin();
+  const sessionSecretConfigured = hasSessionSecret();
+  const prodamusConfigured = isProdamusConfigured();
+  const smtpConfigured = isEmailDeliveryConfigured();
+  const storageConfigured = isStorageConfigured();
+  const openAiConfigured = isAssistantConfigured();
 
   const checks: ReadinessCheck[] = [
     {
@@ -44,54 +72,72 @@ export async function getReleaseReadinessSummary(): Promise<ReadinessSummary> {
     {
       key: 'app_origin',
       label: 'APP_ORIGIN',
-      configured: hasAppOrigin(),
+      configured: appOriginConfigured,
       required: true,
-      message: hasAppOrigin()
+      message: appOriginConfigured
         ? 'Базовый домен приложения задан.'
         : 'APP_ORIGIN ещё не задан. Это важно для писем, webhook и origin-проверок.',
     },
     {
+      key: 'public_site_url',
+      label: 'SITE_URL / NEXT_PUBLIC_SITE_URL',
+      configured: publicSiteUrlConfigured,
+      required: true,
+      message: publicSiteUrlConfigured
+        ? 'Публичный адрес сайта задан для sitemap, canonical и реферальных ссылок.'
+        : 'Не задан SITE_URL или NEXT_PUBLIC_SITE_URL. Без этого публичные ссылки и SEO могут остаться на staging-домене.',
+    },
+    {
+      key: 'site_origin_match',
+      label: 'Совпадение SITE_URL и APP_ORIGIN',
+      configured: siteOriginMatch,
+      required: true,
+      message: siteOriginMatch
+        ? 'Публичный домен и APP_ORIGIN совпадают.'
+        : 'SITE_URL/NEXT_PUBLIC_SITE_URL и APP_ORIGIN не совпадают. Это риск для canonical, sitemap, писем и возврата после оплаты.',
+    },
+    {
       key: 'session_secret',
       label: 'SESSION_SECRET',
-      configured: hasSessionSecret(),
+      configured: sessionSecretConfigured,
       required: true,
-      message: hasSessionSecret()
+      message: sessionSecretConfigured
         ? 'Секрет сессий задан.'
         : 'SESSION_SECRET не задан.',
     },
     {
       key: 'prodamus',
       label: 'Prodamus',
-      configured: isProdamusConfigured(),
+      configured: prodamusConfigured,
       required: true,
-      message: isProdamusConfigured()
+      message: prodamusConfigured
         ? 'Оплата через Prodamus настроена.'
         : 'Для оплаты не хватает PRODAMUS_PAYFORM_URL и/или PRODAMUS_SECRET_KEY.',
     },
     {
       key: 'smtp',
       label: 'SMTP-почта',
-      configured: isEmailDeliveryConfigured(),
+      configured: smtpConfigured,
       required: true,
-      message: isEmailDeliveryConfigured()
+      message: smtpConfigured
         ? 'Почта для подтверждений и восстановления пароля настроена.'
         : 'SMTP ещё не подключён.',
     },
     {
       key: 'storage',
       label: 'Файловое хранилище',
-      configured: isStorageConfigured(),
+      configured: storageConfigured,
       required: true,
-      message: isStorageConfigured()
+      message: storageConfigured
         ? 'S3-совместимое хранилище настроено.'
         : 'S3-хранилище ещё не настроено.',
     },
     {
       key: 'openai',
       label: 'OpenAI / AI-помощник',
-      configured: isAssistantConfigured(),
+      configured: openAiConfigured,
       required: true,
-      message: isAssistantConfigured()
+      message: openAiConfigured
         ? 'AI-помощник может отвечать пользователям.'
         : 'OPENAI_API_KEY ещё не задан.',
     },
