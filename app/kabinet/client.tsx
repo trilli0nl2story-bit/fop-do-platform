@@ -3,7 +3,7 @@
 import { useState, useEffect } from 'react';
 import { useRouter, useSearchParams } from 'next/navigation';
 import Link from 'next/link';
-import { LogOut, BookOpen, Star, FileText, ShoppingBag, User, MapPin, Briefcase, Building, Download, Loader2, CheckCircle2 } from 'lucide-react';
+import { LogOut, BookOpen, Star, FileText, ShoppingBag, User, MapPin, Briefcase, Building, Download, Loader2, CheckCircle2, Share2 } from 'lucide-react';
 import { useAuthSession } from '../../src/hooks/useAuthSession';
 
 interface AccountSummary {
@@ -30,6 +30,31 @@ interface AccountSummary {
   documentRequests: {
     total: number;
     items: Array<{ id: string; description: string; status: string; createdAt: string }>;
+  };
+  orders: {
+    total: number;
+    paidTotalRubles: number;
+    items: Array<{
+      id: string;
+      status: string;
+      totalRubles: number;
+      discountRubles: number;
+      createdAt: string;
+      paidAt: string | null;
+    }>;
+  };
+  referral: {
+    code: string;
+    discountPercent: number;
+    linkPath: string;
+    registeredCount: number;
+    paidCount: number;
+    recentInvites: Array<{
+      id: string;
+      email: string;
+      status: string;
+      updatedAt: string;
+    }>;
   };
 }
 
@@ -234,6 +259,8 @@ export function KabinetClient() {
   const sub = summary?.subscription;
   const mats = summary?.materials;
   const docs = summary?.documentRequests;
+  const orders = summary?.orders;
+  const referral = summary?.referral;
 
   // ── Authenticated ─────────────────────────────────────────────────────────
   return (
@@ -461,6 +488,64 @@ export function KabinetClient() {
                   В магазин →
                 </Link>
               </>
+            )}
+          </div>
+
+          {/* Orders */}
+          <div className="bg-white rounded-2xl border border-gray-200 shadow-sm p-5">
+            <div className="flex items-center gap-3 mb-3">
+              <div className="w-9 h-9 bg-emerald-50 rounded-xl flex items-center justify-center">
+                <ShoppingBag className="w-5 h-5 text-emerald-600" />
+              </div>
+              <p className="text-sm font-semibold text-gray-800">
+                Заказы{orders && orders.total > 0 ? ` (${orders.total})` : ''}
+              </p>
+            </div>
+            {summaryLoading ? (
+              <p className="text-sm text-gray-400">Загрузка...</p>
+            ) : orders && orders.total > 0 ? (
+              <div className="space-y-2">
+                <p className="text-sm text-gray-700">
+                  Оплачено на сумму <span className="font-semibold">{orders.paidTotalRubles.toLocaleString('ru-RU')} ₽</span>
+                </p>
+                <ul className="space-y-2">
+                  {orders.items.slice(0, 3).map((order) => (
+                    <li key={order.id} className="text-xs text-gray-500">
+                      {order.status === 'paid' ? 'Оплачен' : order.status === 'pending' ? 'Ожидает оплату' : order.status}
+                      {' '}· {order.totalRubles.toLocaleString('ru-RU')} ₽ · {formatDate(order.createdAt)}
+                    </li>
+                  ))}
+                </ul>
+              </div>
+            ) : (
+              <p className="text-sm text-gray-500">Оплаченные заказы появятся здесь после первых покупок.</p>
+            )}
+          </div>
+
+          {/* Referral */}
+          <div className="bg-white rounded-2xl border border-gray-200 shadow-sm p-5">
+            <div className="flex items-center gap-3 mb-3">
+              <div className="w-9 h-9 bg-sky-50 rounded-xl flex items-center justify-center">
+                <Share2 className="w-5 h-5 text-sky-500" />
+              </div>
+              <p className="text-sm font-semibold text-gray-800">Реферальная скидка</p>
+            </div>
+            {summaryLoading ? (
+              <p className="text-sm text-gray-400">Загрузка...</p>
+            ) : referral ? (
+              <div className="space-y-2">
+                <p className="text-sm text-gray-700">
+                  Ваш код: <span className="font-semibold tracking-wide">{referral.code}</span>
+                </p>
+                <p className="text-xs text-gray-500">
+                  Дает {referral.discountPercent}% скидки на первый оплаченный заказ.
+                </p>
+                <p className="text-xs text-gray-500">
+                  Пришло по вашей ссылке: {referral.registeredCount}, оплатили: {referral.paidCount}
+                </p>
+              </div>
+            ) : (
+              <p className="text-sm text-gray-500">Реферальный код появится здесь автоматически.</p>
             )}
           </div>
 

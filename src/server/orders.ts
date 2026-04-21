@@ -6,6 +6,7 @@ import {
   type CartQuoteItem,
   type CartQuoteInputItem,
 } from './cartQuote';
+import { claimReferralForOrder } from './referrals';
 import { buildProdamusPayformUrl, isProdamusConfigured } from './prodamus';
 
 export class CheckoutError extends Error {
@@ -331,7 +332,17 @@ export async function createStoreOrderCheckout(params: {
   );
 
   const { order, payment } = await withTransaction(async (client) => {
-    return createOrderRows(client, params.userId, quote, availableItems);
+    const created = await createOrderRows(client, params.userId, quote, availableItems);
+
+    if (quote.referral.applied && quote.referral.code) {
+      await claimReferralForOrder({
+        referredUserId: params.userId,
+        referralCode: quote.referral.code,
+        client,
+      });
+    }
+
+    return created;
   });
 
   const paymentUrl = buildPaymentUrl({

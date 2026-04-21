@@ -8,6 +8,7 @@ import {
 } from '@/src/server/auth';
 import { verifyCaptchaToken } from '@/src/server/captcha';
 import { issueEmailVerification } from '@/src/server/emailVerification';
+import { ensureUserReferralProfile } from '@/src/server/referrals';
 import {
   consumeRequestRateLimit,
   rateLimitResponse,
@@ -113,6 +114,8 @@ export async function POST(req: NextRequest) {
         typeof city === 'string' ? city.trim() : '',
       ]
     );
+
+    await ensureUserReferralProfile(user.id, user.email);
 
     let delivery: { delivered: boolean; mode: 'smtp' | 'disabled' } = {
       delivered: false,

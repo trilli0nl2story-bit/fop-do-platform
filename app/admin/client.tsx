@@ -27,6 +27,9 @@ import {
 } from 'lucide-react';
 import { MaterialFileManager } from './material-file-manager';
 import { CategoryManager } from './category-manager';
+import { OrdersManager } from './orders-manager';
+import { SubscriptionsManager } from './subscriptions-manager';
+import { ReferralsManager } from './referrals-manager';
 
 type LoadState = 'loading' | 'unauth' | 'forbidden' | 'ready';
 type AdminSection =
@@ -101,6 +104,15 @@ const navItems: Array<{
 function formatNumber(value: number) {
   return new Intl.NumberFormat('ru-RU').format(value);
 }
+
+const liveSections = new Set<AdminSection>([
+  'dashboard',
+  'documents',
+  'categories',
+  'orders',
+  'subscriptions',
+  'referrals',
+]);
 
 function formatDate(value: string) {
   return new Date(value).toLocaleString('ru-RU', {
@@ -372,8 +384,11 @@ export function AdminClient() {
 
   function renderSection() {
     if (activeSection === 'dashboard') return <DashboardSection summary={summary} />;
+    if (activeSection === 'orders') return <OrdersManager />;
     if (activeSection === 'documents') return <MaterialFileManager />;
     if (activeSection === 'categories') return <CategoryManager />;
+    if (activeSection === 'subscriptions') return <SubscriptionsManager />;
+    if (activeSection === 'referrals') return <ReferralsManager />;
     return <DevelopmentNotice title={activeLabel} />;
   }
 
@@ -416,12 +431,12 @@ export function AdminClient() {
                 {item.icon}
               </span>
               <span className="flex-1 text-left">{item.label}</span>
-              {!item.ready && (
+              {!item.ready && !liveSections.has(item.id) && (
                 <span className="text-[10px] px-1.5 py-0.5 rounded-full bg-amber-50 text-amber-700">
                   soon
                 </span>
               )}
-              {item.ready && item.id !== 'dashboard' && (
+              {(item.ready || liveSections.has(item.id)) && item.id !== 'dashboard' && (
                 <CheckCircle className="w-3.5 h-3.5 text-green-500" />
               )}
             </button>
@@ -450,7 +465,7 @@ export function AdminClient() {
               <Menu className="w-5 h-5 text-gray-600" />
             </button>
             <span className="text-sm font-semibold text-gray-900">{activeLabel}</span>
-            {navItems.find(item => item.id === activeSection && !item.ready) && (
+            {navItems.find(item => item.id === activeSection && !item.ready && !liveSections.has(item.id)) && (
               <span className="text-xs px-2 py-0.5 rounded-full bg-amber-50 text-amber-700 font-semibold">
                 разрабатывается
               </span>

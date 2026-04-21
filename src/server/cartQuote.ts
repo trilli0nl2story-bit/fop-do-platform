@@ -1,5 +1,6 @@
 import { storeProducts } from '../data/storeProducts';
 import { query } from './db';
+import { resolveReferralDiscountForUser } from './referrals';
 
 export const MAX_CART_DISCOUNT_PERCENT = 35;
 export const SUBSCRIPTION_STORE_DISCOUNT_PERCENT = 25;
@@ -15,12 +16,6 @@ type MaterialRow = {
   access_type: 'store' | 'free' | 'subscription';
   is_published: boolean;
   category_name: string;
-};
-
-type ReferralRow = {
-  referral_code: string;
-  discount_pct: number | string;
-  referrer_id: string;
 };
 
 export interface CartQuoteInputItem {
@@ -157,51 +152,13 @@ async function resolveReferralDiscount(
   referralCode: string | null | undefined,
   userId: string | null | undefined
 ): Promise<{ code: string | null; requestedPercent: number; message: string | null }> {
-  const normalizedCode = referralCode?.trim() ?? '';
-  if (!normalizedCode) {
-    return { code: null, requestedPercent: 0, message: null };
-  }
-
-  const result = await query<ReferralRow>(
-    `
-      SELECT referral_code, discount_pct, referrer_id
-      FROM referrals
-      WHERE lower(referral_code) = lower($1)
-      ORDER BY created_at DESC
-      LIMIT 1
-    `,
-    [normalizedCode]
-  );
-
-  const row = result.rows[0];
-  if (!row) {
-    return {
-      code: normalizedCode,
-      requestedPercent: 0,
-      message: 'Реферальный код не найден.',
-    };
-  }
-
-  if (userId && row.referrer_id === userId) {
-    return {
-      code: row.referral_code,
-      requestedPercent: 0,
-      message: 'Нельзя применить собственный реферальный код.',
-    };
-  }
-
-  if (userId && await hasPaidOrders(userId)) {
-    return {
-      code: row.referral_code,
-      requestedPercent: 0,
-      message: 'Реферальная скидка действует только на первый оплаченный заказ.',
-    };
-  }
+  const paidOrders = userId ? await hasPaidOrders(userId) : false;
+  const resolved = await resolveReferralDiscountForUser(referralCode, userId, paidOrders);
 
   return {
-    code: row.referral_code,
-    requestedPercent: Math.max(0, Number(row.discount_pct ?? DEFAULT_REFERRAL_DISCOUNT_PERCENT)),
-    message: null,
+    code: resolved.code,
+    requestedPercent: Math.max(0, Number(resolved.requestedPercent ?? DEFAULT_REFERRAL_DISCOUNT_PERCENT)),
+    message: resolved.message,
   };
 }
 

@@ -1,6 +1,8 @@
 import { NextResponse } from 'next/server';
 import { query, withTransaction } from '@/src/server/db';
 import { getProdamusConfig, verifyProdamusSignature } from '@/src/server/prodamus';
+import { markReferralClaimPaid } from '@/src/server/referrals';
+import { activateSubscriptionFromPayment } from '@/src/server/subscriptions';
 
 export const dynamic = 'force-dynamic';
 
@@ -18,6 +20,7 @@ type WebhookPaymentRow = {
   status: string;
   amount: number | string;
   provider_payment_id: string | null;
+  raw_payload: Record<string, unknown> | null;
 };
 
 type ProdamusWebhookPayload = Record<string, unknown> & {
@@ -100,7 +103,7 @@ export async function POST(request: Request) {
 
     const paymentResult = await query<WebhookPaymentRow>(
       `
-        SELECT id, status, amount, provider_payment_id
+        SELECT id, status, amount, provider_payment_id, raw_payload
         FROM payments
         WHERE order_id = $1
         ORDER BY created_at DESC
@@ -160,19 +163,55 @@ export async function POST(request: Request) {
         [orderId]
       );
 
-      await client.query(
-        `
-          INSERT INTO user_materials (user_id, material_id, access_type, order_id, granted_at)
-          SELECT o.user_id, oi.material_id, 'purchase', o.id, now()
-          FROM orders o
-          JOIN order_items oi ON oi.order_id = o.id
-          WHERE o.id = $1
-          ON CONFLICT (user_id, material_id) DO NOTHING
-        `,
-        [orderId]
-      );
+      const paymentKind =
+        typeof payment.raw_payload?.kind === 'string'
+          ? payment.raw_payload.kind
+          : 'store_order';
+
+      if (paymentKind === 'subscription') {
+        const planId =
+          typeof payment.raw_payload?.planCode === 'string'
+            ? payment.raw_payload.planCode
+            : 'monthly';
+        const months =
+          typeof payment.raw_payload?.months === 'number'
+            ? payment.raw_payload.months
+            : Number(payment.raw_payload?.months ?? 1);
+
+        await activateSubscriptionFromPayment({
+          client,
+          userId: order.user_id,
+          planId,
+          months: Number.isFinite(months) && months > 0 ? months : 1,
+          rawPayload: {
+            source: 'prodamus-webhook',
+            paymentId: payment.id,
+            providerPaymentId,
+            webhook: payload,
+          },
+        });
+      } else {
+        await client.query(
+          `
+            INSERT INTO user_materials (user_id, material_id, access_type, order_id, granted_at)
+            SELECT o.user_id, oi.material_id, 'purchase', o.id, now()
+            FROM orders o
+            JOIN order_items oi ON oi.order_id = o.id
+            WHERE o.id = $1
+            ON CONFLICT (user_id, material_id) DO NOTHING
+          `,
+          [orderId]
+        );
+      }
 
       if (order.coupon_code && Number(order.referral_discount ?? 0) > 0) {
+        await markReferralClaimPaid({
+          orderId,
+          referredUserId: order.user_id,
+          referralCode: order.coupon_code,
+          client,
+        });
+
         await client.query(
           `
             UPDATE referrals

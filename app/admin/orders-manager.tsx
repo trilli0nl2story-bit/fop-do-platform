@@ -1,0 +1,162 @@
+'use client';
+
+import { useEffect, useState } from 'react';
+import { Loader2, Search, ShoppingBag } from 'lucide-react';
+
+interface AdminOrderItem {
+  id: string;
+  status: string;
+  totalRubles: number;
+  discountRubles: number;
+  referralDiscountPercent: number;
+  couponCode: string | null;
+  createdAt: string;
+  paidAt: string | null;
+  userEmail: string;
+  paymentStatus: string;
+  provider: string;
+}
+
+function formatDate(iso: string) {
+  return new Date(iso).toLocaleString('ru-RU', {
+    day: 'numeric',
+    month: 'short',
+    hour: '2-digit',
+    minute: '2-digit',
+  });
+}
+
+const STATUS_LABELS: Record<string, string> = {
+  pending: 'Ожидает оплату',
+  paid: 'Оплачен',
+  cancelled: 'Отменён',
+  refunded: 'Возврат',
+};
+
+export function OrdersManager() {
+  const [items, setItems] = useState<AdminOrderItem[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [search, setSearch] = useState('');
+  const [status, setStatus] = useState('');
+  const [error, setError] = useState('');
+
+  useEffect(() => {
+    const controller = new AbortController();
+    const params = new URLSearchParams();
+    if (search.trim()) params.set('search', search.trim());
+    if (status) params.set('status', status);
+
+    setLoading(true);
+    setError('');
+
+    fetch(`/api/admin/orders?${params.toString()}`, {
+      credentials: 'include',
+      signal: controller.signal,
+    })
+      .then((res) => (res.ok ? res.json() : Promise.reject(res.status)))
+      .then((data) => setItems(Array.isArray(data?.items) ? data.items : []))
+      .catch(() => {
+        if (!controller.signal.aborted) {
+          setError('Не удалось загрузить заказы. Обновите страницу.');
+        }
+      })
+      .finally(() => {
+        if (!controller.signal.aborted) {
+          setLoading(false);
+        }
+      });
+
+    return () => controller.abort();
+  }, [search, status]);
+
+  return (
+    <div className="space-y-5">
+      <div>
+        <h1 className="text-2xl font-bold text-gray-900 mb-1">Заказы</h1>
+        <p className="text-sm text-gray-500">Живой список заказов, статусов оплаты и применённых скидок.</p>
+      </div>
+
+      <div className="bg-white rounded-2xl border border-gray-200 shadow-sm p-4 flex flex-col lg:flex-row gap-3">
+        <label className="relative flex-1">
+          <Search className="w-4 h-4 text-gray-400 absolute left-3 top-1/2 -translate-y-1/2" />
+          <input
+            value={search}
+            onChange={(event) => setSearch(event.target.value)}
+            placeholder="Поиск по email или id заказа"
+            className="w-full pl-9 pr-3 py-2.5 rounded-xl border border-gray-200 text-sm outline-none focus:border-blue-400"
+          />
+        </label>
+        <select
+          value={status}
+          onChange={(event) => setStatus(event.target.value)}
+          className="px-3 py-2.5 rounded-xl border border-gray-200 text-sm outline-none focus:border-blue-400"
+        >
+          <option value="">Все статусы</option>
+          <option value="pending">Ожидают оплату</option>
+          <option value="paid">Оплачены</option>
+          <option value="cancelled">Отменены</option>
+          <option value="refunded">Возвраты</option>
+        </select>
+      </div>
+
+      {error && (
+        <div className="bg-red-50 border border-red-100 text-red-700 rounded-2xl px-4 py-3 text-sm">
+          {error}
+        </div>
+      )}
+
+      <div className="bg-white rounded-2xl border border-gray-200 shadow-sm overflow-hidden">
+        {loading ? (
+          <div className="h-40 flex items-center justify-center">
+            <Loader2 className="w-5 h-5 text-gray-400 animate-spin" />
+          </div>
+        ) : items.length === 0 ? (
+          <div className="h-40 flex flex-col items-center justify-center text-center px-4">
+            <ShoppingBag className="w-8 h-8 text-gray-300 mb-3" />
+            <p className="text-sm font-medium text-gray-600">Заказов пока нет</p>
+          </div>
+        ) : (
+          <div className="divide-y divide-gray-100">
+            {items.map((item) => (
+              <div key={item.id} className="p-4 space-y-2">
+                <div className="flex flex-col sm:flex-row sm:items-start sm:justify-between gap-2">
+                  <div className="min-w-0">
+                    <p className="text-sm font-semibold text-gray-900 break-all">{item.userEmail}</p>
+                    <p className="text-xs text-gray-500 break-all">{item.id}</p>
+                  </div>
+                  <div className="text-right">
+                    <p className="text-lg font-bold text-gray-900">{item.totalRubles.toLocaleString('ru-RU')} ₽</p>
+                    <p className="text-xs text-gray-500">{formatDate(item.createdAt)}</p>
+                  </div>
+                </div>
+                <div className="flex flex-wrap gap-2 text-xs">
+                  <span className="px-2 py-1 rounded-full bg-blue-50 text-blue-700 font-medium">
+                    {STATUS_LABELS[item.status] ?? item.status}
+                  </span>
+                  <span className="px-2 py-1 rounded-full bg-gray-50 text-gray-600 font-medium">
+                    Платёж: {item.paymentStatus}
+                  </span>
+                  {item.discountRubles > 0 && (
+                    <span className="px-2 py-1 rounded-full bg-green-50 text-green-700 font-medium">
+                      Скидка {item.discountRubles.toLocaleString('ru-RU')} ₽
+                    </span>
+                  )}
+                  {item.referralDiscountPercent > 0 && (
+                    <span className="px-2 py-1 rounded-full bg-amber-50 text-amber-700 font-medium">
+                      Рефералка {item.referralDiscountPercent}%
+                    </span>
+                  )}
+                  {item.couponCode && (
+                    <span className="px-2 py-1 rounded-full bg-purple-50 text-purple-700 font-medium">
+                      Код {item.couponCode}
+                    </span>
+                  )}
+                </div>
+              </div>
+            ))}
+          </div>
+        )}
+      </div>
+    </div>
+  );
+}

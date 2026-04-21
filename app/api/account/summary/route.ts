@@ -2,6 +2,7 @@ import { NextResponse } from 'next/server';
 import { getCurrentUser } from '@/src/server/auth';
 import { query } from '@/src/server/db';
 import { isEmailDeliveryConfigured } from '@/src/server/email';
+import { getReferralSummary } from '@/src/server/referrals';
 
 export const dynamic = 'force-dynamic';
 
@@ -20,27 +21,34 @@ export async function GET() {
     );
     const emailVerified = Boolean(userRes.rows[0]?.email_verified_at);
 
-    // ── Profile ──────────────────────────────────────────────────────────────
     const profileRes = await query<{
-      name: string; last_name: string; patronymic: string;
-      role: string; city: string; institution: string; phone: string;
+      name: string;
+      last_name: string;
+      patronymic: string;
+      role: string;
+      city: string;
+      institution: string;
+      phone: string;
     }>(
       'SELECT name, last_name, patronymic, role, city, institution, phone FROM user_profiles WHERE id = $1',
       [userId]
     );
     const p = profileRes.rows[0];
 
-    // ── Subscription ─────────────────────────────────────────────────────────
     const subRes = await query<{
-      status: string; plan_code: string | null; current_period_end: string | null;
+      status: string;
+      plan_code: string | null;
+      current_period_end: string | null;
     }>(
-      `SELECT status, plan_code, current_period_end
-       FROM subscriptions
-       WHERE user_id = $1
-       ORDER BY
-         CASE WHEN status = 'active' AND current_period_end > now() THEN 0 ELSE 1 END,
-         created_at DESC
-       LIMIT 1`,
+      `
+        SELECT status, plan_code, current_period_end
+        FROM subscriptions
+        WHERE user_id = $1
+        ORDER BY
+          CASE WHEN status = 'active' AND current_period_end > now() THEN 0 ELSE 1 END,
+          created_at DESC
+        LIMIT 1
+      `,
       [userId]
     );
 
@@ -49,16 +57,13 @@ export async function GET() {
       subscription = { status: 'none', planCode: null, currentPeriodEnd: null };
     } else {
       const s = subRes.rows[0];
-      const isActive = s.status === 'active' &&
+      const isActive =
+        s.status === 'active' &&
         s.current_period_end !== null &&
         new Date(s.current_period_end) > new Date();
-      const status = isActive
-        ? 'active'
-        : s.status === 'active'
-          ? 'expired'
-          : s.status;
+
       subscription = {
-        status,
+        status: isActive ? 'active' : s.status === 'active' ? 'expired' : s.status,
         planCode: s.plan_code ?? null,
         currentPeriodEnd: s.current_period_end
           ? new Date(s.current_period_end).toISOString()
@@ -66,28 +71,37 @@ export async function GET() {
       };
     }
 
-    // ── Materials ─────────────────────────────────────────────────────────────
     const matCountRes = await query<{ count: string }>(
-      `SELECT COUNT(*) AS count FROM user_materials
-       WHERE user_id = $1 AND (expires_at IS NULL OR expires_at > now())`,
+      `
+        SELECT COUNT(*) AS count
+        FROM user_materials
+        WHERE user_id = $1
+          AND (expires_at IS NULL OR expires_at > now())
+      `,
       [userId]
     );
     const matTotal = parseInt(matCountRes.rows[0]?.count ?? '0', 10);
 
     const matItemsRes = await query<{
-      id: string; slug: string; title: string;
-      access_type: string; granted_at: string; expires_at: string | null;
+      id: string;
+      slug: string;
+      title: string;
+      access_type: string;
+      granted_at: string;
+      expires_at: string | null;
     }>(
-      `SELECT um.id, m.slug, m.title, um.access_type, um.granted_at, um.expires_at
-       FROM user_materials um
-       JOIN materials m ON m.id = um.material_id
-       WHERE um.user_id = $1 AND (um.expires_at IS NULL OR um.expires_at > now())
-       ORDER BY um.granted_at DESC
-       LIMIT 10`,
+      `
+        SELECT um.id, m.slug, m.title, um.access_type, um.granted_at, um.expires_at
+        FROM user_materials um
+        JOIN materials m ON m.id = um.material_id
+        WHERE um.user_id = $1
+          AND (um.expires_at IS NULL OR um.expires_at > now())
+        ORDER BY um.granted_at DESC
+        LIMIT 10
+      `,
       [userId]
     );
 
-    // ── Document requests ─────────────────────────────────────────────────────
     const docCountRes = await query<{ count: string }>(
       'SELECT COUNT(*) AS count FROM document_requests WHERE user_id = $1',
       [userId]
@@ -95,16 +109,21 @@ export async function GET() {
     const docTotal = parseInt(docCountRes.rows[0]?.count ?? '0', 10);
 
     const docItemsRes = await query<{
-      id: string; description: string; status: string; created_at: string;
+      id: string;
+      description: string;
+      status: string;
+      created_at: string;
     }>(
-      `SELECT id, description, status, created_at FROM document_requests
-       WHERE user_id = $1
-       ORDER BY created_at DESC
-       LIMIT 5`,
+      `
+        SELECT id, description, status, created_at
+        FROM document_requests
+        WHERE user_id = $1
+        ORDER BY created_at DESC
+        LIMIT 5
+      `,
       [userId]
     );
 
-    // ── Orders ────────────────────────────────────────────────────────────────
     const orderStatsRes = await query<{
       count: string;
       paid_total_kopecks: string | null;
@@ -119,23 +138,26 @@ export async function GET() {
       [userId]
     );
 
-    const orderItemsRes = await query<{
-      id: string;
-      status: string;
-      total_amount: number | string;
-      discount_amount: number | string;
-      created_at: string;
-      paid_at: string | null;
-    }>(
-      `
-        SELECT id, status, total_amount, discount_amount, created_at, paid_at
-        FROM orders
-        WHERE user_id = $1
-        ORDER BY created_at DESC
-        LIMIT 5
-      `,
-      [userId]
-    );
+    const [orderItemsRes, referralSummary] = await Promise.all([
+      query<{
+        id: string;
+        status: string;
+        total_amount: number | string;
+        discount_amount: number | string;
+        created_at: string;
+        paid_at: string | null;
+      }>(
+        `
+          SELECT id, status, total_amount, discount_amount, created_at, paid_at
+          FROM orders
+          WHERE user_id = $1
+          ORDER BY created_at DESC
+          LIMIT 5
+        `,
+        [userId]
+      ),
+      getReferralSummary(userId, sessionUser.email),
+    ]);
 
     return NextResponse.json({
       user: {
@@ -159,7 +181,7 @@ export async function GET() {
       subscription,
       materials: {
         total: matTotal,
-        items: matItemsRes.rows.map(r => ({
+        items: matItemsRes.rows.map((r) => ({
           id: r.id,
           slug: r.slug,
           title: r.title,
@@ -170,7 +192,7 @@ export async function GET() {
       },
       documentRequests: {
         total: docTotal,
-        items: docItemsRes.rows.map(r => ({
+        items: docItemsRes.rows.map((r) => ({
           id: r.id,
           description: r.description,
           status: r.status,
@@ -188,6 +210,14 @@ export async function GET() {
           createdAt: new Date(row.created_at).toISOString(),
           paidAt: row.paid_at ? new Date(row.paid_at).toISOString() : null,
         })),
+      },
+      referral: {
+        code: referralSummary.code,
+        discountPercent: referralSummary.discountPercent,
+        linkPath: referralSummary.linkPath,
+        registeredCount: referralSummary.registeredCount,
+        paidCount: referralSummary.paidCount,
+        recentInvites: referralSummary.recentInvites,
       },
     });
   } catch (err) {
