@@ -5,6 +5,7 @@ export function resolveRoute(page: string): string {
   if (page === 'landing') return '/';
   if (page === 'login') return '/vhod';
   if (page === 'register') return '/registratsiya';
+  if (page === 'forgot-password') return '/vosstanovlenie-parolya';
   if (page === 'dashboard') return '/kabinet';
   if (page === 'profile') return '/kabinet';
   if (page === 'materials-hub' || page.startsWith('materials-hub/')) return '/materialy';

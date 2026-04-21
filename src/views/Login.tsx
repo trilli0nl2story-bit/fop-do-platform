@@ -8,7 +8,8 @@ interface LoginProps {
   onLogin: () => void;
 }
 
-const SERVER_NOT_READY = 'Сервер авторизации ещё не настроен. Попробуйте позже.';
+const SERVER_NOT_READY =
+  'Сервер авторизации ещё не настроен. Попробуйте позже.';
 
 export function Login({ onNavigate, onLogin }: LoginProps) {
   const searchParams = useSearchParams();
@@ -43,7 +44,9 @@ export function Login({ onNavigate, onLogin }: LoginProps) {
       onLogin();
       onNavigate('dashboard');
     } catch {
-      setError('Не удалось подключиться к серверу. Проверьте интернет-соединение.');
+      setError(
+        'Не удалось подключиться к серверу. Проверьте интернет-соединение.'
+      );
     } finally {
       setLoading(false);
     }
@@ -53,7 +56,9 @@ export function Login({ onNavigate, onLogin }: LoginProps) {
     <div className="min-h-screen bg-gradient-to-b from-blue-50 to-white flex items-center justify-center px-4">
       <div className="w-full max-w-md">
         <div className="text-center mb-8">
-          <h1 className="text-3xl font-bold text-gray-900 mb-2">Вход в систему</h1>
+          <h1 className="text-3xl font-bold text-gray-900 mb-2">
+            Вход в систему
+          </h1>
           <p className="text-gray-600">Введите ваши данные для входа</p>
         </div>
 
@@ -66,7 +71,14 @@ export function Login({ onNavigate, onLogin }: LoginProps) {
 
           {searchParams.get('emailVerification') === 'invalid' && (
             <div className="mb-5 text-sm text-red-600 bg-red-50 border border-red-200 rounded-xl px-4 py-3">
-              Ссылка подтверждения недействительна или уже устарела. Войдите в аккаунт и запросите новое письмо.
+              Ссылка подтверждения недействительна или уже устарела. Войдите в
+              аккаунт и запросите новое письмо.
+            </div>
+          )}
+
+          {searchParams.get('passwordReset') === 'success' && (
+            <div className="mb-5 text-sm text-green-700 bg-green-50 border border-green-200 rounded-xl px-4 py-3">
+              Пароль обновлён. Теперь можно войти с новым паролем.
             </div>
           )}
 
@@ -102,6 +114,15 @@ export function Login({ onNavigate, onLogin }: LoginProps) {
               {loading ? 'Вход...' : 'Войти'}
             </Button>
           </form>
+
+          <div className="mt-4 text-center">
+            <button
+              onClick={() => onNavigate('forgot-password')}
+              className="text-sm font-medium text-gray-600 hover:text-blue-600"
+            >
+              Забыли пароль?
+            </button>
+          </div>
 
           <div className="mt-6 text-center">
             <button
