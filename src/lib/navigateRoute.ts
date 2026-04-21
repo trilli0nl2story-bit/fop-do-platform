@@ -10,6 +10,10 @@ export function resolveRoute(page: string): string {
   if (page === 'profile') return '/kabinet';
   if (page === 'cart') return '/korzina';
   if (page === 'subscription') return '/podpiska';
+  if (page === 'assistant') return '/pomoshchnik';
+  if (page === 'my-documents') return '/moi-dokumenty';
+  if (page === 'young-specialist') return '/molodoy-specialist';
+  if (page === 'request-document') return '/zakazat-dokument';
   if (page === 'materials-hub' || page.startsWith('materials-hub/')) return '/materialy';
   if (page === 'free-materials') return '/materialy/besplatno';
   if (page === 'subscription-materials') return '/materialy/podpiska';
