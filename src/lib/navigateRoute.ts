@@ -14,6 +14,7 @@ export function resolveRoute(page: string): string {
   if (page === 'my-documents') return '/moi-dokumenty';
   if (page === 'young-specialist') return '/molodoy-specialist';
   if (page === 'request-document') return '/zakazat-dokument';
+  if (page === 'become-author') return '/stat-avtorom';
   if (page === 'materials-hub' || page.startsWith('materials-hub/')) return '/materialy';
   if (page === 'free-materials') return '/materialy/besplatno';
   if (page === 'subscription-materials') return '/materialy/podpiska';
