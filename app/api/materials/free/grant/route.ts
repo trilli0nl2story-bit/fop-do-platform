@@ -1,14 +1,35 @@
 import { NextResponse } from 'next/server';
 import { getCurrentUser } from '@/src/server/auth';
 import { query } from '@/src/server/db';
+import {
+  consumeRequestRateLimit,
+  rateLimitResponse,
+  requireTrustedOrigin,
+} from '@/src/server/security';
 
 export const dynamic = 'force-dynamic';
 
 export async function POST(request: Request) {
   try {
+    const originError = requireTrustedOrigin(request);
+    if (originError) return originError;
+
     const sessionUser = await getCurrentUser();
     if (!sessionUser) {
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+    }
+
+    const rate = await consumeRequestRateLimit(request, {
+      scope: 'materials-free-grant',
+      limit: 30,
+      windowSeconds: 5 * 60,
+      keyParts: [sessionUser.id],
+    });
+    if (!rate.allowed) {
+      return rateLimitResponse(
+        rate,
+        'Слишком много запросов на добавление материалов. Подождите немного и попробуйте ещё раз.'
+      );
     }
 
     let body: unknown;
@@ -23,7 +44,6 @@ export async function POST(request: Request) {
       return NextResponse.json({ error: 'materialSlug is required' }, { status: 400 });
     }
 
-    // Only grant published free materials — never store/subscription
     const matResult = await query<{ id: string; slug: string; title: string }>(
       `SELECT id, slug, title FROM materials
        WHERE slug = $1 AND access_type = 'free' AND is_published = true

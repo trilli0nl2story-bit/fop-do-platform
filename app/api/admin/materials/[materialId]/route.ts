@@ -1,6 +1,11 @@
 import { NextResponse } from 'next/server';
 import { getCurrentUser } from '@/src/server/auth';
 import { query } from '@/src/server/db';
+import {
+  consumeRequestRateLimit,
+  rateLimitResponse,
+  requireTrustedOrigin,
+} from '@/src/server/security';
 
 export const dynamic = 'force-dynamic';
 
@@ -124,8 +129,24 @@ function publicMaterial(row: {
 
 export async function PATCH(request: Request, { params }: Params) {
   try {
+    const originError = requireTrustedOrigin(request);
+    if (originError) return originError;
+
     const { user, error } = await requireAdmin();
     if (error) return error;
+
+    const rate = await consumeRequestRateLimit(request, {
+      scope: 'admin-materials-write',
+      limit: 40,
+      windowSeconds: 5 * 60,
+      keyParts: [user!.id],
+    });
+    if (!rate.allowed) {
+      return rateLimitResponse(
+        rate,
+        'Слишком много изменений материалов. Подождите немного и попробуйте ещё раз.'
+      );
+    }
 
     const { materialId } = await params;
     if (!materialId) {

@@ -5,9 +5,28 @@ import {
   createSessionToken,
   setSessionCookie,
 } from '@/src/server/auth';
+import {
+  consumeRequestRateLimit,
+  rateLimitResponse,
+  requireTrustedOrigin,
+} from '@/src/server/security';
 
 export async function POST(req: NextRequest) {
-  // ── Parse body ──────────────────────────────────────────────────────────────
+  const originError = requireTrustedOrigin(req);
+  if (originError) return originError;
+
+  const ipRate = await consumeRequestRateLimit(req, {
+    scope: 'auth-register-ip',
+    limit: 5,
+    windowSeconds: 60 * 60,
+  });
+  if (!ipRate.allowed) {
+    return rateLimitResponse(
+      ipRate,
+      'Слишком много регистраций с этого адреса. Подождите немного и попробуйте ещё раз.'
+    );
+  }
+
   let body: Record<string, unknown>;
   try {
     body = await req.json();
@@ -17,7 +36,6 @@ export async function POST(req: NextRequest) {
 
   const { name, role, city, email, password } = body;
 
-  // ── Validate ────────────────────────────────────────────────────────────────
   if (typeof email !== 'string' || !email.trim()) {
     return NextResponse.json({ error: 'Email обязателен' }, { status: 400 });
   }
@@ -30,7 +48,19 @@ export async function POST(req: NextRequest) {
 
   const normalizedEmail = email.trim().toLowerCase();
 
-  // ── Check duplicate ─────────────────────────────────────────────────────────
+  const emailRate = await consumeRequestRateLimit(req, {
+    scope: 'auth-register-email',
+    limit: 3,
+    windowSeconds: 60 * 60,
+    keyParts: [normalizedEmail],
+  });
+  if (!emailRate.allowed) {
+    return rateLimitResponse(
+      emailRate,
+      'Слишком много попыток регистрации для этого email. Подождите немного и попробуйте ещё раз.'
+    );
+  }
+
   try {
     const { rows: existing } = await query<{ id: string }>(
       'SELECT id FROM users WHERE email = $1',
@@ -43,11 +73,11 @@ export async function POST(req: NextRequest) {
       );
     }
 
-    // ── Hash password ───────────────────────────────────────────────────────
     const passwordHash = await hashPassword(password);
 
-    // ── Insert user ─────────────────────────────────────────────────────────
-    const { rows: [user] } = await query<{
+    const {
+      rows: [user],
+    } = await query<{
       id: string;
       email: string;
       is_admin: boolean;
@@ -58,7 +88,6 @@ export async function POST(req: NextRequest) {
       [normalizedEmail, passwordHash]
     );
 
-    // ── Insert profile ──────────────────────────────────────────────────────
     await query(
       `INSERT INTO user_profiles (id, name, role, city, updated_at)
        VALUES ($1, $2, $3, $4, now())`,
@@ -70,7 +99,6 @@ export async function POST(req: NextRequest) {
       ]
     );
 
-    // ── Create session ──────────────────────────────────────────────────────
     const token = await createSessionToken({
       id: user.id,
       email: user.email,

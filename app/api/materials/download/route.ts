@@ -3,14 +3,35 @@ import { getCurrentUser } from '@/src/server/auth';
 import { query } from '@/src/server/db';
 import { checkMaterialAccess } from '@/src/server/materialAccess';
 import { getMaterialFile, createDownloadDescriptor } from '@/src/server/storage';
+import {
+  consumeRequestRateLimit,
+  rateLimitResponse,
+  requireTrustedOrigin,
+} from '@/src/server/security';
 
 export const dynamic = 'force-dynamic';
 
 export async function POST(request: Request) {
   try {
+    const originError = requireTrustedOrigin(request);
+    if (originError) return originError;
+
     const sessionUser = await getCurrentUser();
     if (!sessionUser) {
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+    }
+
+    const rate = await consumeRequestRateLimit(request, {
+      scope: 'materials-download',
+      limit: 60,
+      windowSeconds: 5 * 60,
+      keyParts: [sessionUser.id],
+    });
+    if (!rate.allowed) {
+      return rateLimitResponse(
+        rate,
+        'Слишком много запросов на скачивание. Подождите немного и попробуйте ещё раз.'
+      );
     }
 
     let body: unknown;

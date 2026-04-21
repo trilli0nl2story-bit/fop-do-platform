@@ -1,6 +1,11 @@
 import { NextResponse } from 'next/server';
 import { getCurrentUser } from '@/src/server/auth';
 import { query } from '@/src/server/db';
+import {
+  consumeRequestRateLimit,
+  rateLimitResponse,
+  requireTrustedOrigin,
+} from '@/src/server/security';
 
 export const dynamic = 'force-dynamic';
 
@@ -81,8 +86,24 @@ export async function GET() {
 
 export async function POST(request: Request) {
   try {
+    const originError = requireTrustedOrigin(request);
+    if (originError) return originError;
+
     const { user, error } = await requireAdmin();
     if (error) return error;
+
+    const rate = await consumeRequestRateLimit(request, {
+      scope: 'admin-categories-write',
+      limit: 30,
+      windowSeconds: 5 * 60,
+      keyParts: [user!.id],
+    });
+    if (!rate.allowed) {
+      return rateLimitResponse(
+        rate,
+        'Слишком много изменений в разделах. Подождите немного и попробуйте ещё раз.'
+      );
+    }
 
     const body = await request.json().catch(() => null);
     const name = typeof body?.name === 'string' ? body.name.trim().slice(0, 180) : '';

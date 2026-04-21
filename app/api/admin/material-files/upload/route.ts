@@ -9,6 +9,11 @@ import {
   registerMaterialFile,
   uploadMaterialFile,
 } from '@/src/server/storage';
+import {
+  consumeRequestRateLimit,
+  rateLimitResponse,
+  requireTrustedOrigin,
+} from '@/src/server/security';
 
 export const dynamic = 'force-dynamic';
 export const runtime = 'nodejs';
@@ -17,9 +22,9 @@ const MAX_UPLOAD_BYTES = 100 * 1024 * 1024;
 
 async function requireAdmin() {
   const user = await getCurrentUser();
-  if (!user) return { error: NextResponse.json({ error: 'Unauthorized' }, { status: 401 }) };
-  if (!user.isAdmin) return { error: NextResponse.json({ error: 'Forbidden' }, { status: 403 }) };
-  return { error: null };
+  if (!user) return { user: null, error: NextResponse.json({ error: 'Unauthorized' }, { status: 401 }) };
+  if (!user.isAdmin) return { user: null, error: NextResponse.json({ error: 'Forbidden' }, { status: 403 }) };
+  return { user, error: null };
 }
 
 function getFormString(form: FormData, key: string): string {
@@ -39,8 +44,24 @@ function isUploadFile(value: FormDataEntryValue | null): value is File {
 
 export async function POST(request: Request) {
   try {
-    const { error } = await requireAdmin();
+    const originError = requireTrustedOrigin(request);
+    if (originError) return originError;
+
+    const { user, error } = await requireAdmin();
     if (error) return error;
+
+    const rate = await consumeRequestRateLimit(request, {
+      scope: 'admin-material-upload',
+      limit: 12,
+      windowSeconds: 10 * 60,
+      keyParts: [user!.id],
+    });
+    if (!rate.allowed) {
+      return rateLimitResponse(
+        rate,
+        'Слишком много загрузок файлов. Подождите немного и попробуйте ещё раз.'
+      );
+    }
 
     let form: FormData;
     try {

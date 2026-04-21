@@ -5,9 +5,28 @@ import {
   createSessionToken,
   setSessionCookie,
 } from '@/src/server/auth';
+import {
+  consumeRequestRateLimit,
+  rateLimitResponse,
+  requireTrustedOrigin,
+} from '@/src/server/security';
 
 export async function POST(req: NextRequest) {
-  // ── Parse body ──────────────────────────────────────────────────────────────
+  const originError = requireTrustedOrigin(req);
+  if (originError) return originError;
+
+  const ipRate = await consumeRequestRateLimit(req, {
+    scope: 'auth-login-ip',
+    limit: 12,
+    windowSeconds: 10 * 60,
+  });
+  if (!ipRate.allowed) {
+    return rateLimitResponse(
+      ipRate,
+      'Слишком много попыток входа. Подождите немного и попробуйте ещё раз.'
+    );
+  }
+
   let body: Record<string, unknown>;
   try {
     body = await req.json();
@@ -17,7 +36,6 @@ export async function POST(req: NextRequest) {
 
   const { email, password } = body;
 
-  // ── Validate ────────────────────────────────────────────────────────────────
   if (typeof email !== 'string' || !email.trim()) {
     return NextResponse.json({ error: 'Email обязателен' }, { status: 400 });
   }
@@ -27,8 +45,20 @@ export async function POST(req: NextRequest) {
 
   const normalizedEmail = email.trim().toLowerCase();
 
+  const credentialRate = await consumeRequestRateLimit(req, {
+    scope: 'auth-login-email',
+    limit: 6,
+    windowSeconds: 10 * 60,
+    keyParts: [normalizedEmail],
+  });
+  if (!credentialRate.allowed) {
+    return rateLimitResponse(
+      credentialRate,
+      'Слишком много попыток входа для этого email. Подождите немного и попробуйте ещё раз.'
+    );
+  }
+
   try {
-    // ── Look up user ────────────────────────────────────────────────────────
     const { rows } = await query<{
       id: string;
       email: string;
@@ -41,8 +71,6 @@ export async function POST(req: NextRequest) {
 
     const user = rows[0];
 
-    // Constant-time comparison: always run verifyPassword even if user not found
-    // to prevent timing-based user enumeration.
     const dummyHash =
       '$2b$12$AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA';
     const passwordHash = user?.password_hash ?? dummyHash;
@@ -55,7 +83,6 @@ export async function POST(req: NextRequest) {
       );
     }
 
-    // ── Create session ──────────────────────────────────────────────────────
     const token = await createSessionToken({
       id: user.id,
       email: user.email,
