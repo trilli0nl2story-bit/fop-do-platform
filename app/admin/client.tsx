@@ -35,6 +35,7 @@ import { DocumentRequestsManager } from './document-requests-manager';
 import { AuthorApplicationsManager } from './author-applications-manager';
 import { AiRequestsManager } from './ai-requests-manager';
 import { YoungSpecialistManager } from './young-specialist-manager';
+import { UsersManager } from './users-manager';
 
 type LoadState = 'loading' | 'unauth' | 'forbidden' | 'ready';
 type AdminSection =
@@ -104,7 +105,7 @@ const navItems: Array<{
   { id: 'subscriptions', label: 'Подписки', icon: <Crown className="w-5 h-5" />, ready: true },
   { id: 'referrals', label: 'Рефералы', icon: <Share2 className="w-5 h-5" />, ready: true },
   { id: 'ai', label: 'AI-запросы', icon: <Bot className="w-5 h-5" />, ready: true },
-  { id: 'users', label: 'Пользователи', icon: <Users className="w-5 h-5" />, ready: false },
+  { id: 'users', label: 'Пользователи', icon: <Users className="w-5 h-5" />, ready: true },
   { id: 'young-specialist', label: 'Мол. специалист', icon: <HelpCircle className="w-5 h-5" />, ready: true },
 ];
 
@@ -119,6 +120,7 @@ const liveSections = new Set<AdminSection>([
   'subscriptions',
   'referrals',
   'ai',
+  'users',
   'young-specialist',
 ]);
 
@@ -406,6 +408,7 @@ export function AdminClient() {
     if (activeSection === 'subscriptions') return <SubscriptionsManager />;
     if (activeSection === 'referrals') return <ReferralsManager />;
     if (activeSection === 'ai') return <AiRequestsManager />;
+    if (activeSection === 'users') return <UsersManager />;
     if (activeSection === 'young-specialist') return <YoungSpecialistManager />;
     return <DevelopmentNotice title={activeLabel} />;
   }
