@@ -31,12 +31,15 @@ import { RevenueManager } from './revenue-manager';
 import { OrdersManager } from './orders-manager';
 import { SubscriptionsManager } from './subscriptions-manager';
 import { ReferralsManager } from './referrals-manager';
+import { DocumentRequestsManager } from './document-requests-manager';
+import { AuthorApplicationsManager } from './author-applications-manager';
 
 type LoadState = 'loading' | 'unauth' | 'forbidden' | 'ready';
 type AdminSection =
   | 'dashboard'
   | 'revenue'
   | 'orders'
+  | 'document-requests'
   | 'authors'
   | 'applications'
   | 'documents'
@@ -89,32 +92,35 @@ const navItems: Array<{
   ready: boolean;
 }> = [
   { id: 'dashboard', label: 'Обзор', icon: <LayoutDashboard className="w-5 h-5" />, ready: true },
-  { id: 'revenue', label: 'Выручка', icon: <DollarSign className="w-5 h-5" />, ready: false },
-  { id: 'orders', label: 'Заказы', icon: <Package className="w-5 h-5" />, ready: false },
+  { id: 'revenue', label: 'Выручка', icon: <DollarSign className="w-5 h-5" />, ready: true },
+  { id: 'orders', label: 'Заказы', icon: <Package className="w-5 h-5" />, ready: true },
+  { id: 'document-requests', label: 'Заявки на документы', icon: <FileText className="w-5 h-5" />, ready: true },
   { id: 'authors', label: 'Авторы', icon: <TrendingUp className="w-5 h-5" />, ready: false },
-  { id: 'applications', label: 'Заявки авторов', icon: <UserCheck className="w-5 h-5" />, ready: false },
+  { id: 'applications', label: 'Авторские заявки', icon: <UserCheck className="w-5 h-5" />, ready: true },
   { id: 'documents', label: 'Документы', icon: <FileText className="w-5 h-5" />, ready: true },
   { id: 'categories', label: 'Категории', icon: <FolderOpen className="w-5 h-5" />, ready: true },
-  { id: 'subscriptions', label: 'Подписки', icon: <Crown className="w-5 h-5" />, ready: false },
-  { id: 'referrals', label: 'Рефералы', icon: <Share2 className="w-5 h-5" />, ready: false },
+  { id: 'subscriptions', label: 'Подписки', icon: <Crown className="w-5 h-5" />, ready: true },
+  { id: 'referrals', label: 'Рефералы', icon: <Share2 className="w-5 h-5" />, ready: true },
   { id: 'ai', label: 'AI-запросы', icon: <Bot className="w-5 h-5" />, ready: false },
   { id: 'users', label: 'Пользователи', icon: <Users className="w-5 h-5" />, ready: false },
   { id: 'young-specialist', label: 'Мол. специалист', icon: <HelpCircle className="w-5 h-5" />, ready: false },
 ];
 
-function formatNumber(value: number) {
-  return new Intl.NumberFormat('ru-RU').format(value);
-}
-
 const liveSections = new Set<AdminSection>([
   'dashboard',
   'revenue',
+  'orders',
+  'document-requests',
+  'applications',
   'documents',
   'categories',
-  'orders',
   'subscriptions',
   'referrals',
 ]);
+
+function formatNumber(value: number) {
+  return new Intl.NumberFormat('ru-RU').format(value);
+}
 
 function formatDate(value: string) {
   return new Date(value).toLocaleString('ru-RU', {
@@ -167,11 +173,12 @@ function DevelopmentNotice({ title }: { title: string }) {
       </div>
       <h1 className="text-2xl font-bold text-gray-900 mb-2">{title}</h1>
       <span className="inline-flex mb-4 px-3 py-1 rounded-full bg-amber-50 text-amber-700 text-xs font-semibold">
-        Разрабатывается
+        разрабатывается
       </span>
       <p className="text-sm text-gray-500 max-w-2xl">
-        Этот раздел оставлен в меню, потому что он нужен по смыслу старой удобной админки. Сейчас я не подставляю сюда
-        декоративные цифры и нерабочие кнопки. Когда подключим реальные данные и действия, пометка исчезнет.
+        Этот раздел оставлен в меню по смыслу старой удобной админки. Сейчас сюда не
+        подставлены декоративные цифры и нерабочие кнопки. Когда подключим реальные
+        данные и действия, пометка исчезнет.
       </p>
     </div>
   );
@@ -255,7 +262,7 @@ function DashboardSection({ summary }: { summary: AdminSummary | null }) {
           <h2 className="font-semibold text-gray-900 mb-4">Последние файлы</h2>
           {summary?.recentFiles.length ? (
             <div className="space-y-3">
-              {summary.recentFiles.map(file => (
+              {summary.recentFiles.map((file) => (
                 <div key={file.id} className="border border-gray-100 rounded-xl p-3">
                   <p className="text-sm font-medium text-gray-900 line-clamp-1">{file.materialTitle}</p>
                   <p className="text-xs text-gray-500 mt-1 break-all">{file.storageKey}</p>
@@ -276,7 +283,7 @@ function DashboardSection({ summary }: { summary: AdminSummary | null }) {
           <h2 className="font-semibold text-gray-900 mb-4">Последние пользователи</h2>
           {summary?.recentUsers.length ? (
             <div className="space-y-3">
-              {summary.recentUsers.map(user => (
+              {summary.recentUsers.map((user) => (
                 <div key={user.id} className="flex items-center gap-3">
                   <div className="w-9 h-9 bg-gray-100 rounded-full flex items-center justify-center">
                     <User className="w-4 h-4 text-gray-500" />
@@ -338,7 +345,7 @@ export function AdminClient() {
   }, []);
 
   const activeLabel = useMemo(
-    () => navItems.find(item => item.id === activeSection)?.label ?? 'Админка',
+    () => navItems.find((item) => item.id === activeSection)?.label ?? 'Админка',
     [activeSection]
   );
 
@@ -388,6 +395,8 @@ export function AdminClient() {
     if (activeSection === 'dashboard') return <DashboardSection summary={summary} />;
     if (activeSection === 'revenue') return <RevenueManager />;
     if (activeSection === 'orders') return <OrdersManager />;
+    if (activeSection === 'document-requests') return <DocumentRequestsManager />;
+    if (activeSection === 'applications') return <AuthorApplicationsManager />;
     if (activeSection === 'documents') return <MaterialFileManager />;
     if (activeSection === 'categories') return <CategoryManager />;
     if (activeSection === 'subscriptions') return <SubscriptionsManager />;
@@ -416,7 +425,7 @@ export function AdminClient() {
         </div>
 
         <nav className="p-3 space-y-1">
-          {navItems.map(item => (
+          {navItems.map((item) => (
             <button
               key={item.id}
               type="button"
@@ -468,7 +477,7 @@ export function AdminClient() {
               <Menu className="w-5 h-5 text-gray-600" />
             </button>
             <span className="text-sm font-semibold text-gray-900">{activeLabel}</span>
-            {navItems.find(item => item.id === activeSection && !item.ready && !liveSections.has(item.id)) && (
+            {navItems.find((item) => item.id === activeSection && !item.ready && !liveSections.has(item.id)) && (
               <span className="text-xs px-2 py-0.5 rounded-full bg-amber-50 text-amber-700 font-semibold">
                 разрабатывается
               </span>
