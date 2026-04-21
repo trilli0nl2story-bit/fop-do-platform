@@ -1,17 +1,18 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { query } from '@/src/server/db';
 import {
-  hashPassword,
   createSessionToken,
+  getSessionUserById,
+  hashPassword,
   setSessionCookie,
 } from '@/src/server/auth';
+import { verifyCaptchaToken } from '@/src/server/captcha';
+import { issueEmailVerification } from '@/src/server/emailVerification';
 import {
   consumeRequestRateLimit,
   rateLimitResponse,
   requireTrustedOrigin,
 } from '@/src/server/security';
-import { verifyCaptchaToken } from '@/src/server/captcha';
-import { issueEmailVerification } from '@/src/server/emailVerification';
 
 export async function POST(req: NextRequest) {
   const originError = requireTrustedOrigin(req);
@@ -49,6 +50,7 @@ export async function POST(req: NextRequest) {
   if (typeof email !== 'string' || !email.trim()) {
     return NextResponse.json({ error: 'Email обязателен' }, { status: 400 });
   }
+
   if (typeof password !== 'string' || password.length < 8) {
     return NextResponse.json(
       { error: 'Пароль должен содержать не менее 8 символов' },
@@ -90,12 +92,11 @@ export async function POST(req: NextRequest) {
     } = await query<{
       id: string;
       email: string;
-      is_admin: boolean;
     }>(
       `
         INSERT INTO users (email, password_hash, is_admin, email_verified_at, created_at, updated_at)
         VALUES ($1, $2, false, null, now(), now())
-        RETURNING id, email, is_admin
+        RETURNING id, email
       `,
       [normalizedEmail, passwordHash]
     );
@@ -117,6 +118,7 @@ export async function POST(req: NextRequest) {
       delivered: false,
       mode: 'disabled',
     };
+
     try {
       delivery = await issueEmailVerification({
         userId: user.id,
@@ -130,20 +132,23 @@ export async function POST(req: NextRequest) {
       );
     }
 
-    const token = await createSessionToken({
-      id: user.id,
-      email: user.email,
-      isAdmin: user.is_admin,
-      emailVerified: false,
-    });
+    const sessionUser = await getSessionUserById(user.id);
+    if (!sessionUser) {
+      return NextResponse.json(
+        { error: 'Ошибка сервера. Попробуйте позже.' },
+        { status: 500 }
+      );
+    }
+
+    const token = await createSessionToken(sessionUser);
 
     const response = NextResponse.json(
       {
         user: {
-          id: user.id,
-          email: user.email,
-          isAdmin: user.is_admin,
-          emailVerified: false,
+          id: sessionUser.id,
+          email: sessionUser.email,
+          isAdmin: sessionUser.isAdmin,
+          emailVerified: sessionUser.emailVerified,
         },
         verification: {
           sent: delivery.delivered,

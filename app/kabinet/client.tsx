@@ -59,6 +59,8 @@ export function KabinetClient() {
   const { user, isAuthenticated, loading, refresh } = useAuthSession();
   const [logoutLoading, setLogoutLoading] = useState(false);
   const [logoutError, setLogoutError] = useState('');
+  const [logoutAllLoading, setLogoutAllLoading] = useState(false);
+  const [logoutAllError, setLogoutAllError] = useState('');
   const [summary, setSummary] = useState<AccountSummary | null>(null);
   const [summaryLoading, setSummaryLoading] = useState(false);
   const [summaryError, setSummaryError] = useState('');
@@ -156,6 +158,35 @@ export function KabinetClient() {
       setLogoutError('Ошибка соединения. Попробуйте ещё раз.');
     } finally {
       setLogoutLoading(false);
+    }
+  }
+
+  async function handleLogoutAll() {
+    setLogoutAllLoading(true);
+    setLogoutAllError('');
+    try {
+      const res = await fetch('/api/auth/logout-all', {
+        method: 'POST',
+        credentials: 'include',
+      });
+      const data = await res.json().catch(() => ({}));
+
+      if (res.ok) {
+        refresh();
+        router.push(data.redirectTo ?? '/vhod?sessionReset=success');
+      } else {
+        setLogoutAllError(
+          data.message ??
+            data.error ??
+            'Не удалось завершить сессии на других устройствах. Попробуйте ещё раз.'
+        );
+      }
+    } catch {
+      setLogoutAllError(
+        'Не удалось завершить сессии на других устройствах. Проверьте соединение и попробуйте ещё раз.'
+      );
+    } finally {
+      setLogoutAllLoading(false);
     }
   }
 
@@ -318,6 +349,23 @@ export function KabinetClient() {
               {logoutError}
             </p>
           )}
+          <div className="mt-4 pt-4 border-t border-gray-100">
+            <button
+              onClick={handleLogoutAll}
+              disabled={logoutAllLoading}
+              className="inline-flex items-center justify-center px-4 py-2 border border-gray-200 hover:border-gray-300 text-gray-700 text-sm font-medium rounded-xl transition-colors disabled:opacity-50"
+            >
+              {logoutAllLoading ? 'Завершаем все сессии...' : 'Выйти на всех устройствах'}
+            </button>
+            <p className="mt-2 text-xs text-gray-500">
+              Полезно, если вы заходили с чужого компьютера или хотите сбросить все старые входы.
+            </p>
+            {logoutAllError && (
+              <p className="mt-3 text-sm text-red-600 bg-red-50 border border-red-100 rounded-xl px-4 py-3">
+                {logoutAllError}
+              </p>
+            )}
+          </div>
         </div>
 
         {/* Status cards */}

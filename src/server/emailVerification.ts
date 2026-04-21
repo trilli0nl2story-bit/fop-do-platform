@@ -1,4 +1,5 @@
 import { createHash, randomBytes } from 'node:crypto';
+import { getSessionUserById } from './auth';
 import { query } from './db';
 import { sendEmail } from './email';
 
@@ -135,6 +136,7 @@ export async function consumeEmailVerificationToken(token: string): Promise<{
     email: string;
     isAdmin: boolean;
     emailVerified: boolean;
+    sessionVersion: number;
   };
 }> {
   await ensureTable();
@@ -142,12 +144,11 @@ export async function consumeEmailVerificationToken(token: string): Promise<{
   const tokenHash = hashToken(token);
   const tokenResult = await query<{
     user_id: string;
-    email: string;
     expires_at: string;
     consumed_at: string | null;
   }>(
     `
-      SELECT user_id, email, expires_at, consumed_at
+      SELECT user_id, expires_at, consumed_at
       FROM email_verification_tokens
       WHERE token_hash = $1
       LIMIT 1
@@ -173,34 +174,23 @@ export async function consumeEmailVerificationToken(token: string): Promise<{
     [tokenHash]
   );
 
-  const userResult = await query<{
-    id: string;
-    email: string;
-    is_admin: boolean;
-    email_verified_at: string | null;
-  }>(
+  await query(
     `
       UPDATE users
       SET email_verified_at = COALESCE(email_verified_at, now()),
           updated_at = now()
       WHERE id = $1
-      RETURNING id, email, is_admin, email_verified_at
     `,
     [tokenRow.user_id]
   );
 
-  const user = userResult.rows[0];
-  if (!user) {
+  const sessionUser = await getSessionUserById(tokenRow.user_id);
+  if (!sessionUser) {
     return { ok: false, reason: 'invalid' };
   }
 
   return {
     ok: true,
-    user: {
-      id: user.id,
-      email: user.email,
-      isAdmin: user.is_admin,
-      emailVerified: Boolean(user.email_verified_at),
-    },
+    user: sessionUser,
   };
 }

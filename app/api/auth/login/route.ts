@@ -1,9 +1,10 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { query } from '@/src/server/db';
 import {
-  verifyPassword,
   createSessionToken,
+  getSessionUserById,
   setSessionCookie,
+  verifyPassword,
 } from '@/src/server/auth';
 import {
   consumeRequestRateLimit,
@@ -39,6 +40,7 @@ export async function POST(req: NextRequest) {
   if (typeof email !== 'string' || !email.trim()) {
     return NextResponse.json({ error: 'Email обязателен' }, { status: 400 });
   }
+
   if (typeof password !== 'string' || !password) {
     return NextResponse.json({ error: 'Пароль обязателен' }, { status: 400 });
   }
@@ -61,15 +63,13 @@ export async function POST(req: NextRequest) {
   try {
     const { rows } = await query<{
       id: string;
-      email: string;
       password_hash: string;
-      is_admin: boolean;
-      email_verified_at: string | null;
     }>(
       `
-        SELECT id, email, password_hash, is_admin, email_verified_at
+        SELECT id, password_hash
         FROM users
         WHERE email = $1
+        LIMIT 1
       `,
       [normalizedEmail]
     );
@@ -87,19 +87,22 @@ export async function POST(req: NextRequest) {
       );
     }
 
-    const token = await createSessionToken({
-      id: user.id,
-      email: user.email,
-      isAdmin: user.is_admin,
-      emailVerified: Boolean(user.email_verified_at),
-    });
+    const sessionUser = await getSessionUserById(user.id);
+    if (!sessionUser) {
+      return NextResponse.json(
+        { error: 'Ошибка сервера. Попробуйте позже.' },
+        { status: 500 }
+      );
+    }
+
+    const token = await createSessionToken(sessionUser);
 
     const response = NextResponse.json({
       user: {
-        id: user.id,
-        email: user.email,
-        isAdmin: user.is_admin,
-        emailVerified: Boolean(user.email_verified_at),
+        id: sessionUser.id,
+        email: sessionUser.email,
+        isAdmin: sessionUser.isAdmin,
+        emailVerified: sessionUser.emailVerified,
       },
     });
     setSessionCookie(response, token);

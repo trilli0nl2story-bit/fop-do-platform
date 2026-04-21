@@ -1,5 +1,5 @@
 import { createHash, randomBytes } from 'node:crypto';
-import { hashPassword } from './auth';
+import { bumpUserSessionVersion, hashPassword } from './auth';
 import { query } from './db';
 import { sendEmail } from './email';
 
@@ -169,6 +169,8 @@ export async function consumePasswordResetToken(params: {
     `,
     [tokenRow.user_id, nextPasswordHash]
   );
+
+  await bumpUserSessionVersion(tokenRow.user_id);
 
   await query(
     `
