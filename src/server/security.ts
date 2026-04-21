@@ -31,10 +31,28 @@ function trustedOriginsFromEnv(): string[] {
     .filter((value): value is string => Boolean(value));
 }
 
+function forwardedOrigin(request: Request): string | null {
+  const forwardedProto = request.headers.get('x-forwarded-proto')?.split(',')[0]?.trim();
+  const forwardedHost = request.headers.get('x-forwarded-host')?.split(',')[0]?.trim();
+  const host = request.headers.get('host')?.trim();
+  const hostname = forwardedHost || host;
+
+  if (!hostname) return null;
+
+  const protocol =
+    forwardedProto && /^[a-z][a-z0-9+.-]*$/i.test(forwardedProto)
+      ? forwardedProto
+      : 'https';
+
+  return normalizeOrigin(`${protocol}://${hostname}`);
+}
+
 function buildTrustedOrigins(request: Request): Set<string> {
   const origins = new Set<string>();
   const requestOrigin = normalizeOrigin(request.url);
   if (requestOrigin) origins.add(requestOrigin);
+  const proxyOrigin = forwardedOrigin(request);
+  if (proxyOrigin) origins.add(proxyOrigin);
 
   for (const origin of trustedOriginsFromEnv()) {
     origins.add(origin);
