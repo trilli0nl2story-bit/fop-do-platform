@@ -89,6 +89,20 @@ interface AdminSummary {
   }>;
 }
 
+interface AdminReadiness {
+  readyCount: number;
+  totalCount: number;
+  requiredReadyCount: number;
+  requiredTotalCount: number;
+  checks: Array<{
+    key: string;
+    label: string;
+    configured: boolean;
+    required: boolean;
+    message: string;
+  }>;
+}
+
 const navItems: Array<{
   id: AdminSection;
   label: string;
@@ -192,7 +206,13 @@ function DevelopmentNotice({ title }: { title: string }) {
   );
 }
 
-function DashboardSection({ summary }: { summary: AdminSummary | null }) {
+function DashboardSection({
+  summary,
+  readiness,
+}: {
+  summary: AdminSummary | null;
+  readiness: AdminReadiness | null;
+}) {
   const stats = summary?.stats;
 
   return (
@@ -311,6 +331,57 @@ function DashboardSection({ summary }: { summary: AdminSummary | null }) {
           )}
         </div>
       </section>
+
+      <section className="bg-white rounded-2xl border border-gray-200 shadow-sm p-5">
+        <div className="flex items-center justify-between gap-3 mb-4">
+          <div>
+            <h2 className="font-semibold text-gray-900">Готовность к переносу</h2>
+            <p className="text-sm text-gray-500 mt-1">
+              Серверный чек-лист по окружению и критичным интеграциям перед переносом на основной сервер.
+            </p>
+          </div>
+          <div className={`px-3 py-1 rounded-full text-xs font-semibold ${
+            readiness && readiness.requiredReadyCount === readiness.requiredTotalCount
+              ? 'bg-green-50 text-green-700'
+              : 'bg-amber-50 text-amber-700'
+          }`}>
+            {readiness
+              ? `${readiness.requiredReadyCount}/${readiness.requiredTotalCount} критичных пунктов`
+              : 'Проверяем...'}
+          </div>
+        </div>
+
+        {readiness ? (
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+            {readiness.checks.map((check) => (
+              <div
+                key={check.key}
+                className={`rounded-xl border p-4 ${
+                  check.configured
+                    ? 'border-green-100 bg-green-50/70'
+                    : 'border-amber-100 bg-amber-50/70'
+                }`}
+              >
+                <div className="flex items-center justify-between gap-3">
+                  <p className="text-sm font-semibold text-gray-900">{check.label}</p>
+                  <span
+                    className={`px-2 py-0.5 rounded-full text-[11px] font-semibold ${
+                      check.configured ? 'bg-green-100 text-green-700' : 'bg-amber-100 text-amber-700'
+                    }`}
+                  >
+                    {check.configured ? 'ok' : 'нужно проверить'}
+                  </span>
+                </div>
+                <p className="mt-2 text-sm text-gray-600">{check.message}</p>
+              </div>
+            ))}
+          </div>
+        ) : (
+          <div className="h-24 flex items-center justify-center">
+            <Loader2 className="w-5 h-5 text-gray-400 animate-spin" />
+          </div>
+        )}
+      </section>
     </div>
   );
 }
@@ -321,6 +392,7 @@ export function AdminClient() {
   const [mobileNavOpen, setMobileNavOpen] = useState(false);
   const [email, setEmail] = useState('');
   const [summary, setSummary] = useState<AdminSummary | null>(null);
+  const [readiness, setReadiness] = useState<AdminReadiness | null>(null);
   const [error, setError] = useState('');
 
   useEffect(() => {
@@ -339,9 +411,14 @@ export function AdminClient() {
           return;
         }
 
-        const summaryRes = await fetch('/api/admin/summary', { credentials: 'include' });
+        const [summaryRes, readinessRes] = await Promise.all([
+          fetch('/api/admin/summary', { credentials: 'include' }),
+          fetch('/api/admin/readiness', { credentials: 'include' }),
+        ]);
         if (!summaryRes.ok) throw new Error('summary');
+        if (!readinessRes.ok) throw new Error('readiness');
         setSummary(await summaryRes.json());
+        setReadiness(await readinessRes.json());
         setLoadState('ready');
       } catch {
         setError('Не удалось загрузить админку. Обновите страницу.');
@@ -400,7 +477,7 @@ export function AdminClient() {
   }
 
   function renderSection() {
-    if (activeSection === 'dashboard') return <DashboardSection summary={summary} />;
+    if (activeSection === 'dashboard') return <DashboardSection summary={summary} readiness={readiness} />;
     if (activeSection === 'revenue') return <RevenueManager />;
     if (activeSection === 'orders') return <OrdersManager />;
     if (activeSection === 'document-requests') return <DocumentRequestsManager />;
