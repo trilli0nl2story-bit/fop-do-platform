@@ -1,7 +1,7 @@
 'use client';
 
 import { useEffect, useState } from 'react';
-import { Loader2, Search, ShoppingBag } from 'lucide-react';
+import { ChevronDown, ChevronUp, Loader2, Search, ShoppingBag } from 'lucide-react';
 
 interface AdminOrderItem {
   id: string;
@@ -15,6 +15,37 @@ interface AdminOrderItem {
   userEmail: string;
   paymentStatus: string;
   provider: string;
+}
+
+interface AdminOrderDetail {
+  order: {
+    id: string;
+    status: string;
+    totalRubles: number;
+    discountRubles: number;
+    referralDiscountPercent: number;
+    couponCode: string | null;
+    createdAt: string;
+    paidAt: string | null;
+    userEmail: string;
+  };
+  payment: {
+    id: string;
+    status: string;
+    provider: string;
+    providerPaymentId: string | null;
+    amountRubles: number;
+    createdAt: string;
+    paidAt: string | null;
+    kind: string;
+  } | null;
+  items: Array<{
+    id: string;
+    materialId: string;
+    slug: string;
+    title: string;
+    priceRubles: number;
+  }>;
 }
 
 function formatDate(iso: string) {
@@ -39,6 +70,9 @@ export function OrdersManager() {
   const [search, setSearch] = useState('');
   const [status, setStatus] = useState('');
   const [error, setError] = useState('');
+  const [expandedOrderId, setExpandedOrderId] = useState('');
+  const [details, setDetails] = useState<Record<string, AdminOrderDetail | null>>({});
+  const [detailLoadingId, setDetailLoadingId] = useState('');
 
   useEffect(() => {
     const controller = new AbortController();
@@ -68,6 +102,37 @@ export function OrdersManager() {
 
     return () => controller.abort();
   }, [search, status]);
+
+  async function toggleDetail(orderId: string) {
+    if (expandedOrderId === orderId) {
+      setExpandedOrderId('');
+      return;
+    }
+
+    setExpandedOrderId(orderId);
+    if (details[orderId]) {
+      return;
+    }
+
+    setDetailLoadingId(orderId);
+    try {
+      const res = await fetch(`/api/admin/orders/${orderId}`, {
+        credentials: 'include',
+      });
+
+      if (!res.ok) {
+        throw new Error(String(res.status));
+      }
+
+      const data = await res.json();
+      setDetails((prev) => ({ ...prev, [orderId]: data }));
+    } catch {
+      setDetails((prev) => ({ ...prev, [orderId]: null }));
+      setError('Не удалось открыть детали заказа. Попробуйте ещё раз.');
+    } finally {
+      setDetailLoadingId('');
+    }
+  }
 
   return (
     <div className="space-y-5">
@@ -117,43 +182,114 @@ export function OrdersManager() {
           </div>
         ) : (
           <div className="divide-y divide-gray-100">
-            {items.map((item) => (
-              <div key={item.id} className="p-4 space-y-2">
-                <div className="flex flex-col sm:flex-row sm:items-start sm:justify-between gap-2">
-                  <div className="min-w-0">
-                    <p className="text-sm font-semibold text-gray-900 break-all">{item.userEmail}</p>
-                    <p className="text-xs text-gray-500 break-all">{item.id}</p>
+            {items.map((item) => {
+              const detail = details[item.id];
+              const isExpanded = expandedOrderId === item.id;
+
+              return (
+                <div key={item.id} className="p-4 space-y-2">
+                  <div className="flex flex-col sm:flex-row sm:items-start sm:justify-between gap-2">
+                    <div className="min-w-0">
+                      <p className="text-sm font-semibold text-gray-900 break-all">{item.userEmail}</p>
+                      <p className="text-xs text-gray-500 break-all">{item.id}</p>
+                    </div>
+                    <div className="text-right">
+                      <p className="text-lg font-bold text-gray-900">{item.totalRubles.toLocaleString('ru-RU')} ₽</p>
+                      <p className="text-xs text-gray-500">{formatDate(item.createdAt)}</p>
+                    </div>
                   </div>
-                  <div className="text-right">
-                    <p className="text-lg font-bold text-gray-900">{item.totalRubles.toLocaleString('ru-RU')} ₽</p>
-                    <p className="text-xs text-gray-500">{formatDate(item.createdAt)}</p>
+
+                  <div className="flex flex-wrap gap-2 text-xs">
+                    <span className="px-2 py-1 rounded-full bg-blue-50 text-blue-700 font-medium">
+                      {STATUS_LABELS[item.status] ?? item.status}
+                    </span>
+                    <span className="px-2 py-1 rounded-full bg-gray-50 text-gray-600 font-medium">
+                      Платёж: {item.paymentStatus}
+                    </span>
+                    {item.discountRubles > 0 && (
+                      <span className="px-2 py-1 rounded-full bg-green-50 text-green-700 font-medium">
+                        Скидка {item.discountRubles.toLocaleString('ru-RU')} ₽
+                      </span>
+                    )}
+                    {item.referralDiscountPercent > 0 && (
+                      <span className="px-2 py-1 rounded-full bg-amber-50 text-amber-700 font-medium">
+                        Рефералка {item.referralDiscountPercent}%
+                      </span>
+                    )}
+                    {item.couponCode && (
+                      <span className="px-2 py-1 rounded-full bg-purple-50 text-purple-700 font-medium">
+                        Код {item.couponCode}
+                      </span>
+                    )}
                   </div>
+
+                  <button
+                    type="button"
+                    onClick={() => toggleDetail(item.id)}
+                    className="inline-flex items-center gap-1 text-xs font-medium text-blue-600 hover:text-blue-700"
+                  >
+                    {isExpanded ? (
+                      <>
+                        <ChevronUp className="w-3.5 h-3.5" />
+                        Скрыть детали
+                      </>
+                    ) : (
+                      <>
+                        <ChevronDown className="w-3.5 h-3.5" />
+                        Открыть детали
+                      </>
+                    )}
+                  </button>
+
+                  {isExpanded && (
+                    <div className="rounded-xl border border-gray-100 bg-gray-50 p-4">
+                      {detailLoadingId === item.id ? (
+                        <div className="flex items-center gap-2 text-sm text-gray-500">
+                          <Loader2 className="w-4 h-4 animate-spin" />
+                          Загружаем детали заказа...
+                        </div>
+                      ) : detail ? (
+                        <div className="space-y-3">
+                          <div className="flex flex-wrap gap-2 text-xs">
+                            {detail.payment && (
+                              <>
+                                <span className="px-2 py-1 rounded-full bg-white text-gray-700 border border-gray-200">
+                                  {detail.payment.provider}
+                                </span>
+                                <span className="px-2 py-1 rounded-full bg-white text-gray-700 border border-gray-200">
+                                  {detail.payment.kind === 'subscription' ? 'Подписка' : 'Покупка материалов'}
+                                </span>
+                                {detail.payment.providerPaymentId && (
+                                  <span className="px-2 py-1 rounded-full bg-white text-gray-700 border border-gray-200">
+                                    #{detail.payment.providerPaymentId}
+                                  </span>
+                                )}
+                              </>
+                            )}
+                          </div>
+
+                          <div className="space-y-2">
+                            {detail.items.map((detailItem) => (
+                              <div key={detailItem.id} className="flex items-start justify-between gap-3 text-sm">
+                                <div className="min-w-0">
+                                  <p className="font-medium text-gray-900">{detailItem.title}</p>
+                                  <p className="text-xs text-gray-500">{detailItem.slug}</p>
+                                </div>
+                                <span className="text-gray-700 whitespace-nowrap">
+                                  {detailItem.priceRubles.toLocaleString('ru-RU')} ₽
+                                </span>
+                              </div>
+                            ))}
+                          </div>
+                        </div>
+                      ) : (
+                        <p className="text-sm text-red-600">Не удалось загрузить детали заказа.</p>
+                      )}
+                    </div>
+                  )}
                 </div>
-                <div className="flex flex-wrap gap-2 text-xs">
-                  <span className="px-2 py-1 rounded-full bg-blue-50 text-blue-700 font-medium">
-                    {STATUS_LABELS[item.status] ?? item.status}
-                  </span>
-                  <span className="px-2 py-1 rounded-full bg-gray-50 text-gray-600 font-medium">
-                    Платёж: {item.paymentStatus}
-                  </span>
-                  {item.discountRubles > 0 && (
-                    <span className="px-2 py-1 rounded-full bg-green-50 text-green-700 font-medium">
-                      Скидка {item.discountRubles.toLocaleString('ru-RU')} ₽
-                    </span>
-                  )}
-                  {item.referralDiscountPercent > 0 && (
-                    <span className="px-2 py-1 rounded-full bg-amber-50 text-amber-700 font-medium">
-                      Рефералка {item.referralDiscountPercent}%
-                    </span>
-                  )}
-                  {item.couponCode && (
-                    <span className="px-2 py-1 rounded-full bg-purple-50 text-purple-700 font-medium">
-                      Код {item.couponCode}
-                    </span>
-                  )}
-                </div>
-              </div>
-            ))}
+              );
+            })}
           </div>
         )}
       </div>
