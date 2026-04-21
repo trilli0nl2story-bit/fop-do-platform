@@ -75,6 +75,7 @@ interface UserOrderDetail {
     providerPaymentId: string | null;
     amountRubles: number;
     paidAt: string | null;
+    resumePaymentUrl: string | null;
   } | null;
   items: Array<{
     materialId: string;
@@ -336,6 +337,11 @@ export function KabinetClient() {
     } finally {
       setOrderDetailsLoadingId('');
     }
+  }
+
+  function handleResumePayment(url: string) {
+    if (!url) return;
+    window.location.assign(url);
   }
 
   async function handleLogout() {
@@ -886,10 +892,22 @@ export function KabinetClient() {
                           ) : detail ? (
                             <>
                               {detail.payment && (
-                                <p className="text-xs text-gray-500">
-                                  Платёж: {PAYMENT_STATUS_LABELS[detail.payment.status] ?? detail.payment.status}
-                                  {' '}· {detail.payment.amountRubles.toLocaleString('ru-RU')} ₽
-                                </p>
+                                <div className="space-y-2">
+                                  <p className="text-xs text-gray-500">
+                                    Платёж: {PAYMENT_STATUS_LABELS[detail.payment.status] ?? detail.payment.status}
+                                    {' '}· {detail.payment.amountRubles.toLocaleString('ru-RU')} ₽
+                                  </p>
+                                  {detail.payment.resumePaymentUrl && (
+                                    <button
+                                      type="button"
+                                      onClick={() => handleResumePayment(detail.payment!.resumePaymentUrl!)}
+                                      className="inline-flex items-center gap-1.5 rounded-lg bg-blue-50 px-3 py-2 text-xs font-medium text-blue-600 transition-colors hover:bg-blue-100"
+                                    >
+                                      <ShoppingBag className="h-3.5 w-3.5" />
+                                      Продолжить оплату
+                                    </button>
+                                  )}
+                                </div>
                               )}
                               <ul className="space-y-1">
                                 {detail.items.map((item) => (

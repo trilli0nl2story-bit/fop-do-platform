@@ -62,6 +62,7 @@ type PaymentStatusRow = {
   provider_payment_id: string | null;
   amount: number | string;
   paid_at: string | null;
+  raw_payload: { payformUrl?: string } | null;
 };
 
 export interface CreateOrderResult {
@@ -88,6 +89,7 @@ export interface UserOrderStatus {
     providerPaymentId: string | null;
     amountRubles: number;
     paidAt: string | null;
+    resumePaymentUrl: string | null;
   } | null;
   items: Array<{
     materialId: string;
@@ -396,7 +398,7 @@ export async function getUserOrderStatus(
   const [paymentResult, itemsResult] = await Promise.all([
     query<PaymentStatusRow>(
       `
-        SELECT status, provider, provider_payment_id, amount, paid_at
+        SELECT status, provider, provider_payment_id, amount, paid_at, raw_payload
         FROM payments
         WHERE order_id = $1
         ORDER BY created_at DESC
@@ -422,6 +424,14 @@ export async function getUserOrderStatus(
   ]);
 
   const payment = paymentResult.rows[0];
+  const resumePaymentUrl =
+    payment?.status === 'pending' &&
+    order.status === 'pending' &&
+    payment.provider === 'prodamus' &&
+    typeof payment.raw_payload?.payformUrl === 'string' &&
+    payment.raw_payload.payformUrl.trim()
+      ? payment.raw_payload.payformUrl.trim()
+      : null;
 
   return {
     order: {
@@ -435,12 +445,13 @@ export async function getUserOrderStatus(
       paidAt: order.paid_at ? new Date(order.paid_at).toISOString() : null,
     },
     payment: payment
-      ? {
+        ? {
           status: payment.status,
           provider: payment.provider,
           providerPaymentId: payment.provider_payment_id,
           amountRubles: kopecksToRubles(Number(payment.amount ?? 0)),
           paidAt: payment.paid_at ? new Date(payment.paid_at).toISOString() : null,
+          resumePaymentUrl,
         }
       : null,
     items: itemsResult.rows.map((item) => ({
