@@ -38,6 +38,17 @@ type ActiveSubscriptionRow = {
   current_period_end: string;
 };
 
+type AdminSubscriptionRow = {
+  id: string;
+  user_id: string;
+  status: string;
+  provider: string;
+  plan_code: string;
+  current_period_start: string;
+  current_period_end: string;
+  updated_at: string;
+};
+
 export interface SubscriptionCheckoutResult {
   orderId: string;
   paymentId: string;
@@ -46,12 +57,41 @@ export interface SubscriptionCheckoutResult {
   planId: SubscriptionPlanDefinition['id'];
 }
 
+export type EffectiveSubscriptionStatus = 'active' | 'cancelled' | 'expired' | 'paused';
+
+export interface AdminSubscriptionUpdateResult {
+  id: string;
+  status: EffectiveSubscriptionStatus;
+  planCode: string;
+  currentPeriodStart: string;
+  currentPeriodEnd: string;
+  updatedAt: string;
+}
+
 function rublesToKopecks(value: number): number {
   return Math.round(value * 100);
 }
 
 function buildRedirectOrigin(requestOrigin: string): string {
   return requestOrigin.replace(/\/+$/, '');
+}
+
+export function getEffectiveSubscriptionStatus(
+  status: string,
+  currentPeriodEnd: string | Date | null
+): EffectiveSubscriptionStatus {
+  if (status === 'active' && currentPeriodEnd) {
+    const end = currentPeriodEnd instanceof Date ? currentPeriodEnd : new Date(currentPeriodEnd);
+    if (end <= new Date()) {
+      return 'expired';
+    }
+  }
+
+  if (status === 'cancelled' || status === 'paused' || status === 'expired') {
+    return status;
+  }
+
+  return 'active';
 }
 
 async function getUserCheckoutInfo(userId: string): Promise<UserCheckoutRow> {
@@ -295,4 +335,114 @@ export async function activateSubscriptionFromPayment(params: {
     `,
     [params.userId, params.planId, params.months, JSON.stringify(params.rawPayload)]
   );
+}
+
+export async function updateSubscriptionByAdmin(params: {
+  subscriptionId: string;
+  action: 'pause' | 'resume' | 'cancel' | 'expire' | 'extend';
+  months?: number;
+}): Promise<AdminSubscriptionUpdateResult> {
+  return withTransaction(async (client) => {
+    const existingResult = await client.query<AdminSubscriptionRow>(
+      `
+        SELECT id, user_id, status, provider, plan_code, current_period_start, current_period_end, updated_at
+        FROM subscriptions
+        WHERE id = $1
+        LIMIT 1
+      `,
+      [params.subscriptionId]
+    );
+
+    const existing = existingResult.rows[0];
+    if (!existing) {
+      throw new SubscriptionCheckoutError('Подписка не найдена.', 404);
+    }
+
+    if (params.action === 'pause') {
+      await client.query(
+        `
+          UPDATE subscriptions
+          SET status = 'paused',
+              updated_at = now()
+          WHERE id = $1
+        `,
+        [params.subscriptionId]
+      );
+    } else if (params.action === 'resume') {
+      const effectiveStatus = getEffectiveSubscriptionStatus(existing.status, existing.current_period_end);
+      if (effectiveStatus === 'expired') {
+        throw new SubscriptionCheckoutError(
+          'Истекшую подписку нельзя просто возобновить. Продлите её на новый период.',
+          409
+        );
+      }
+
+      await client.query(
+        `
+          UPDATE subscriptions
+          SET status = 'active',
+              updated_at = now()
+          WHERE id = $1
+        `,
+        [params.subscriptionId]
+      );
+    } else if (params.action === 'cancel') {
+      await client.query(
+        `
+          UPDATE subscriptions
+          SET status = 'cancelled',
+              updated_at = now()
+          WHERE id = $1
+        `,
+        [params.subscriptionId]
+      );
+    } else if (params.action === 'expire') {
+      await client.query(
+        `
+          UPDATE subscriptions
+          SET status = 'expired',
+              current_period_end = now(),
+              updated_at = now()
+          WHERE id = $1
+        `,
+        [params.subscriptionId]
+      );
+    } else if (params.action === 'extend') {
+      const months = Number.isFinite(params.months) ? Math.max(1, Math.round(params.months ?? 1)) : 1;
+      await client.query(
+        `
+          UPDATE subscriptions
+          SET status = 'active',
+              current_period_end = GREATEST(current_period_end, now()) + make_interval(months => $2),
+              updated_at = now()
+          WHERE id = $1
+        `,
+        [params.subscriptionId, months]
+      );
+    }
+
+    const updatedResult = await client.query<AdminSubscriptionRow>(
+      `
+        SELECT id, user_id, status, provider, plan_code, current_period_start, current_period_end, updated_at
+        FROM subscriptions
+        WHERE id = $1
+        LIMIT 1
+      `,
+      [params.subscriptionId]
+    );
+
+    const updated = updatedResult.rows[0];
+    if (!updated) {
+      throw new SubscriptionCheckoutError('Не удалось обновить подписку.', 500);
+    }
+
+    return {
+      id: updated.id,
+      status: getEffectiveSubscriptionStatus(updated.status, updated.current_period_end),
+      planCode: updated.plan_code,
+      currentPeriodStart: new Date(updated.current_period_start).toISOString(),
+      currentPeriodEnd: new Date(updated.current_period_end).toISOString(),
+      updatedAt: new Date(updated.updated_at).toISOString(),
+    };
+  });
 }

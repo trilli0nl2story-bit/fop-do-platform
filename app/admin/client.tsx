@@ -27,6 +27,7 @@ import {
 } from 'lucide-react';
 import { MaterialFileManager } from './material-file-manager';
 import { CategoryManager } from './category-manager';
+import { RevenueManager } from './revenue-manager';
 import { OrdersManager } from './orders-manager';
 import { SubscriptionsManager } from './subscriptions-manager';
 import { ReferralsManager } from './referrals-manager';
@@ -107,6 +108,7 @@ function formatNumber(value: number) {
 
 const liveSections = new Set<AdminSection>([
   'dashboard',
+  'revenue',
   'documents',
   'categories',
   'orders',
@@ -384,6 +386,7 @@ export function AdminClient() {
 
   function renderSection() {
     if (activeSection === 'dashboard') return <DashboardSection summary={summary} />;
+    if (activeSection === 'revenue') return <RevenueManager />;
     if (activeSection === 'orders') return <OrdersManager />;
     if (activeSection === 'documents') return <MaterialFileManager />;
     if (activeSection === 'categories') return <CategoryManager />;

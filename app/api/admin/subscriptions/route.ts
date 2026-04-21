@@ -1,6 +1,7 @@
 import { NextResponse } from 'next/server';
 import { getCurrentUser } from '@/src/server/auth';
 import { query } from '@/src/server/db';
+import { getEffectiveSubscriptionStatus } from '@/src/server/subscriptions';
 
 export const dynamic = 'force-dynamic';
 
@@ -17,6 +18,7 @@ export async function GET(request: Request) {
     if (error) return error;
 
     const { searchParams } = new URL(request.url);
+    const search = searchParams.get('search')?.trim() ?? '';
     const status = searchParams.get('status')?.trim() ?? '';
 
     const result = await query<{
@@ -43,25 +45,30 @@ export async function GET(request: Request) {
           u.email AS user_email
         FROM subscriptions s
         JOIN users u ON u.id = s.user_id
-        WHERE ($1 = '' OR s.status = $1)
+        WHERE ($1 = '' OR u.email ILIKE $2)
         ORDER BY s.updated_at DESC
-        LIMIT 50
+        LIMIT 200
       `,
-      [status]
+      [search, `%${search}%`]
     );
 
     return NextResponse.json({
-      items: result.rows.map((row) => ({
-        id: row.id,
-        status: row.status,
-        provider: row.provider,
-        planCode: row.plan_code,
-        currentPeriodStart: new Date(row.current_period_start).toISOString(),
-        currentPeriodEnd: new Date(row.current_period_end).toISOString(),
-        createdAt: new Date(row.created_at).toISOString(),
-        updatedAt: new Date(row.updated_at).toISOString(),
-        userEmail: row.user_email,
-      })),
+      items: result.rows
+        .map((row) => {
+          const effectiveStatus = getEffectiveSubscriptionStatus(row.status, row.current_period_end);
+          return {
+            id: row.id,
+            status: effectiveStatus,
+            provider: row.provider,
+            planCode: row.plan_code,
+            currentPeriodStart: new Date(row.current_period_start).toISOString(),
+            currentPeriodEnd: new Date(row.current_period_end).toISOString(),
+            createdAt: new Date(row.created_at).toISOString(),
+            updatedAt: new Date(row.updated_at).toISOString(),
+            userEmail: row.user_email,
+          };
+        })
+        .filter((item) => !status || item.status === status),
     });
   } catch (err) {
     console.error('[api/admin/subscriptions]', err instanceof Error ? err.message : String(err));
