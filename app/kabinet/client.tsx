@@ -89,12 +89,53 @@ export function KabinetClient() {
   const [summary, setSummary] = useState<AccountSummary | null>(null);
   const [summaryLoading, setSummaryLoading] = useState(false);
   const [summaryError, setSummaryError] = useState('');
+  const [profileEditOpen, setProfileEditOpen] = useState(false);
+  const [profileSaving, setProfileSaving] = useState(false);
+  const [profileError, setProfileError] = useState('');
+  const [profileMessage, setProfileMessage] = useState('');
+  const [referralMessage, setReferralMessage] = useState('');
+  const [profileForm, setProfileForm] = useState({
+    name: '',
+    lastName: '',
+    patronymic: '',
+    role: '',
+    city: '',
+    institution: '',
+    phone: '',
+  });
   const [verifyLoading, setVerifyLoading] = useState(false);
   const [verifyMessage, setVerifyMessage] = useState('');
   const [verifyError, setVerifyError] = useState('');
   const [dlStates, setDlStates] = useState<Record<string, 'idle' | 'loading' | 'ok' | 'denied' | 'error'>>({});
   const [dlMessages, setDlMessages] = useState<Record<string, string>>({});
   const [dlUrls, setDlUrls] = useState<Record<string, string>>({});
+
+  async function loadSummary() {
+    setSummaryLoading(true);
+    setSummaryError('');
+    try {
+      const response = await fetch('/api/account/summary', { credentials: 'include' });
+      if (!response.ok) {
+        throw new Error(String(response.status));
+      }
+
+      const data = await response.json();
+      setSummary(data);
+      setProfileForm({
+        name: data.profile?.name ?? '',
+        lastName: data.profile?.lastName ?? '',
+        patronymic: data.profile?.patronymic ?? '',
+        role: data.profile?.role ?? '',
+        city: data.profile?.city ?? '',
+        institution: data.profile?.institution ?? '',
+        phone: data.profile?.phone ?? '',
+      });
+    } catch {
+      setSummaryError('Не удалось загрузить данные кабинета. Попробуйте обновить страницу.');
+    } finally {
+      setSummaryLoading(false);
+    }
+  }
 
   async function handleDownload(slug: string) {
     setDlStates(prev => ({ ...prev, [slug]: 'loading' }));
@@ -167,6 +208,61 @@ export function KabinetClient() {
       .catch(() => setSummaryError('Не удалось загрузить данные кабинета. Попробуйте обновить страницу.'))
       .finally(() => setSummaryLoading(false));
   }, [isAuthenticated]);
+
+  useEffect(() => {
+    if (!summary) return;
+    setProfileForm({
+      name: summary.profile?.name ?? '',
+      lastName: summary.profile?.lastName ?? '',
+      patronymic: summary.profile?.patronymic ?? '',
+      role: summary.profile?.role ?? '',
+      city: summary.profile?.city ?? '',
+      institution: summary.profile?.institution ?? '',
+      phone: summary.profile?.phone ?? '',
+    });
+  }, [summary]);
+
+  async function handleProfileSave() {
+    setProfileSaving(true);
+    setProfileError('');
+    setProfileMessage('');
+
+    try {
+      const response = await fetch('/api/account/profile', {
+        method: 'PATCH',
+        credentials: 'include',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(profileForm),
+      });
+
+      const data = await response.json().catch(() => ({}));
+      if (!response.ok) {
+        setProfileError(data.error ?? 'Не удалось сохранить профиль. Попробуйте ещё раз.');
+        return;
+      }
+
+      await loadSummary();
+      setProfileMessage('Профиль сохранён.');
+      setProfileEditOpen(false);
+    } catch {
+      setProfileError('Не удалось сохранить профиль. Проверьте соединение и попробуйте ещё раз.');
+    } finally {
+      setProfileSaving(false);
+    }
+  }
+
+  async function handleCopyReferralLink() {
+    if (!referral) return;
+
+    try {
+      await navigator.clipboard.writeText(`${window.location.origin}${referral.linkPath}`);
+      setReferralMessage('Ссылка скопирована.');
+    } catch {
+      setReferralMessage('Не удалось скопировать ссылку автоматически.');
+    }
+
+    window.setTimeout(() => setReferralMessage(''), 2500);
+  }
 
   async function handleLogout() {
     setLogoutLoading(true);
@@ -338,7 +434,7 @@ export function KabinetClient() {
 
         {/* Account info */}
         <div className="bg-white rounded-2xl border border-gray-200 shadow-sm p-6">
-          <div className="flex items-start gap-4">
+          <div className="flex items-start gap-4 justify-between">
             <div className="w-12 h-12 bg-blue-100 rounded-xl flex items-center justify-center flex-shrink-0">
               <User className="w-6 h-6 text-blue-500" />
             </div>
@@ -370,7 +466,106 @@ export function KabinetClient() {
                 )}
               </div>
             </div>
+            <button
+              type="button"
+              onClick={() => {
+                setProfileEditOpen(prev => !prev);
+                setProfileError('');
+                setProfileMessage('');
+              }}
+              className="flex-shrink-0 px-3 py-1.5 border border-gray-200 hover:border-gray-300 text-gray-700 text-sm font-medium rounded-xl transition-colors"
+            >
+              {profileEditOpen ? 'Скрыть' : 'Редактировать'}
+            </button>
           </div>
+          {profileMessage && (
+            <p className="mt-4 text-sm text-green-700 bg-green-50 border border-green-100 rounded-xl px-4 py-3">
+              {profileMessage}
+            </p>
+          )}
+          {profileEditOpen && (
+            <div className="mt-4 border border-gray-100 rounded-2xl p-4 bg-gray-50 space-y-4">
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                <input
+                  value={profileForm.name}
+                  onChange={(event) => setProfileForm(prev => ({ ...prev, name: event.target.value }))}
+                  placeholder="Имя"
+                  className="px-3 py-2.5 rounded-xl border border-gray-200 text-sm outline-none focus:border-blue-400 bg-white"
+                />
+                <input
+                  value={profileForm.lastName}
+                  onChange={(event) => setProfileForm(prev => ({ ...prev, lastName: event.target.value }))}
+                  placeholder="Фамилия"
+                  className="px-3 py-2.5 rounded-xl border border-gray-200 text-sm outline-none focus:border-blue-400 bg-white"
+                />
+                <input
+                  value={profileForm.patronymic}
+                  onChange={(event) => setProfileForm(prev => ({ ...prev, patronymic: event.target.value }))}
+                  placeholder="Отчество"
+                  className="px-3 py-2.5 rounded-xl border border-gray-200 text-sm outline-none focus:border-blue-400 bg-white"
+                />
+                <input
+                  value={profileForm.role}
+                  onChange={(event) => setProfileForm(prev => ({ ...prev, role: event.target.value }))}
+                  placeholder="Роль"
+                  className="px-3 py-2.5 rounded-xl border border-gray-200 text-sm outline-none focus:border-blue-400 bg-white"
+                />
+                <input
+                  value={profileForm.city}
+                  onChange={(event) => setProfileForm(prev => ({ ...prev, city: event.target.value }))}
+                  placeholder="Город"
+                  className="px-3 py-2.5 rounded-xl border border-gray-200 text-sm outline-none focus:border-blue-400 bg-white"
+                />
+                <input
+                  value={profileForm.institution}
+                  onChange={(event) => setProfileForm(prev => ({ ...prev, institution: event.target.value }))}
+                  placeholder="Учреждение"
+                  className="px-3 py-2.5 rounded-xl border border-gray-200 text-sm outline-none focus:border-blue-400 bg-white"
+                />
+              </div>
+              <input
+                value={profileForm.phone}
+                onChange={(event) => setProfileForm(prev => ({ ...prev, phone: event.target.value }))}
+                placeholder="Телефон"
+                className="w-full px-3 py-2.5 rounded-xl border border-gray-200 text-sm outline-none focus:border-blue-400 bg-white"
+              />
+              {profileError && (
+                <p className="text-sm text-red-600">{profileError}</p>
+              )}
+              <div className="flex flex-wrap gap-2">
+                <button
+                  type="button"
+                  onClick={handleProfileSave}
+                  disabled={profileSaving}
+                  className="px-4 py-2 bg-blue-500 hover:bg-blue-600 text-white text-sm font-medium rounded-xl transition-colors disabled:opacity-50"
+                >
+                  {profileSaving ? 'Сохраняем...' : 'Сохранить профиль'}
+                </button>
+                <button
+                  type="button"
+                  onClick={() => {
+                    setProfileEditOpen(false);
+                    setProfileError('');
+                    setProfileMessage('');
+                    if (summary) {
+                      setProfileForm({
+                        name: summary.profile?.name ?? '',
+                        lastName: summary.profile?.lastName ?? '',
+                        patronymic: summary.profile?.patronymic ?? '',
+                        role: summary.profile?.role ?? '',
+                        city: summary.profile?.city ?? '',
+                        institution: summary.profile?.institution ?? '',
+                        phone: summary.profile?.phone ?? '',
+                      });
+                    }
+                  }}
+                  className="px-4 py-2 border border-gray-200 hover:border-gray-300 text-gray-700 text-sm font-medium rounded-xl transition-colors"
+                >
+                  Отмена
+                </button>
+              </div>
+            </div>
+          )}
           {logoutError && (
             <p className="mt-4 text-sm text-red-600 bg-red-50 border border-red-100 rounded-xl px-4 py-3">
               {logoutError}
@@ -548,6 +743,37 @@ export function KabinetClient() {
               <p className="text-sm text-gray-500">Реферальный код появится здесь автоматически.</p>
             )}
           </div>
+
+          {referral && (
+            <div className="bg-white rounded-2xl border border-gray-200 shadow-sm p-5 sm:col-span-2">
+              <p className="text-xs font-semibold text-gray-500 uppercase tracking-wide mb-3">Реферальная ссылка</p>
+              <div className="flex flex-col sm:flex-row sm:items-center gap-3">
+                <button
+                  type="button"
+                  onClick={handleCopyReferralLink}
+                  className="inline-flex items-center justify-center px-4 py-2 bg-sky-500 hover:bg-sky-600 text-white text-sm font-medium rounded-xl transition-colors"
+                >
+                  Скопировать ссылку
+                </button>
+                <span className="text-sm text-gray-500 break-all">{referral.linkPath}</span>
+              </div>
+              {referralMessage && (
+                <p className="mt-3 text-sm text-green-700">{referralMessage}</p>
+              )}
+              {referral.recentInvites.length > 0 && (
+                <div className="mt-4 space-y-2">
+                  <p className="text-sm font-medium text-gray-700">Последние переходы по вашей ссылке</p>
+                  <ul className="space-y-1">
+                    {referral.recentInvites.slice(0, 3).map((invite) => (
+                      <li key={invite.id} className="text-sm text-gray-500">
+                        {invite.email} · {invite.status}
+                      </li>
+                    ))}
+                  </ul>
+                </div>
+              )}
+            </div>
+          )}
 
           {/* Document requests */}
           <div className="bg-white rounded-2xl border border-gray-200 shadow-sm p-5 sm:col-span-2">
