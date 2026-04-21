@@ -3,6 +3,7 @@ import { getCurrentUser } from '@/src/server/auth';
 import { query } from '@/src/server/db';
 import { isEmailDeliveryConfigured } from '@/src/server/email';
 import { getReferralSummary } from '@/src/server/referrals';
+import { getAssistantUsageSummary } from '@/src/server/aiAssistant';
 
 export const dynamic = 'force-dynamic';
 
@@ -138,7 +139,7 @@ export async function GET() {
       [userId]
     );
 
-    const [orderItemsRes, referralSummary] = await Promise.all([
+    const [orderItemsRes, referralSummary, aiSummary] = await Promise.all([
       query<{
         id: string;
         status: string;
@@ -157,6 +158,7 @@ export async function GET() {
         [userId]
       ),
       getReferralSummary(userId, sessionUser.email),
+      getAssistantUsageSummary(userId),
     ]);
 
     return NextResponse.json({
@@ -219,6 +221,7 @@ export async function GET() {
         paidCount: referralSummary.paidCount,
         recentInvites: referralSummary.recentInvites,
       },
+      ai: aiSummary,
     });
   } catch (err) {
     console.error('[api/account/summary]', err instanceof Error ? err.message : String(err));

@@ -3,7 +3,7 @@
 import { useState, useEffect } from 'react';
 import { useRouter, useSearchParams } from 'next/navigation';
 import Link from 'next/link';
-import { LogOut, BookOpen, Star, FileText, ShoppingBag, User, MapPin, Briefcase, Building, Download, Loader2, CheckCircle2, Share2 } from 'lucide-react';
+import { LogOut, BookOpen, Star, FileText, ShoppingBag, User, MapPin, Briefcase, Building, Download, Loader2, CheckCircle2, Share2, Bot } from 'lucide-react';
 import { useAuthSession } from '../../src/hooks/useAuthSession';
 
 interface AccountSummary {
@@ -55,6 +55,15 @@ interface AccountSummary {
       status: string;
       updatedAt: string;
     }>;
+  };
+  ai: {
+    available: boolean;
+    reason: 'active' | 'no_subscription' | 'not_configured';
+    monthlyLimit: number;
+    usedThisMonth: number;
+    remainingThisMonth: number;
+    subscriptionActive: boolean;
+    configured: boolean;
   };
 }
 
@@ -437,6 +446,7 @@ export function KabinetClient() {
   const docs = summary?.documentRequests;
   const orders = summary?.orders;
   const referral = summary?.referral;
+  const ai = summary?.ai;
 
   // ── Authenticated ─────────────────────────────────────────────────────────
   return (
@@ -794,6 +804,37 @@ export function KabinetClient() {
               </div>
             ) : (
               <p className="text-sm text-gray-500">Оплаченные заказы появятся здесь после первых покупок.</p>
+            )}
+          </div>
+
+          {/* AI */}
+          <div className="bg-white rounded-2xl border border-gray-200 shadow-sm p-5">
+            <div className="flex items-center gap-3 mb-3">
+              <div className="w-9 h-9 bg-emerald-50 rounded-xl flex items-center justify-center">
+                <Bot className="w-5 h-5 text-emerald-500" />
+              </div>
+              <p className="text-sm font-semibold text-gray-800">AI-запросы</p>
+            </div>
+            {summaryLoading ? (
+              <p className="text-sm text-gray-400">Загрузка...</p>
+            ) : ai ? (
+              <div className="space-y-2">
+                <p className="text-sm text-gray-700">
+                  Осталось <span className="font-semibold">{ai.remainingThisMonth}</span> из {ai.monthlyLimit} в этом месяце
+                </p>
+                <p className="text-xs text-gray-500">
+                  {ai.subscriptionActive
+                    ? ai.configured
+                      ? 'Помощник доступен по активной подписке.'
+                      : 'Ключ OpenAI ещё не добавлен на сервер.'
+                    : 'AI-помощник откроется после подключения подписки.'}
+                </p>
+                <Link href="/pomoshchnik" className="inline-block pt-1 text-xs font-medium text-blue-500 hover:text-blue-600">
+                  Открыть помощника →
+                </Link>
+              </div>
+            ) : (
+              <p className="text-sm text-gray-500">Статус помощника появится здесь автоматически.</p>
             )}
           </div>
 

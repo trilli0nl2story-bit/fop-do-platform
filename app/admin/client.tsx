@@ -33,6 +33,7 @@ import { SubscriptionsManager } from './subscriptions-manager';
 import { ReferralsManager } from './referrals-manager';
 import { DocumentRequestsManager } from './document-requests-manager';
 import { AuthorApplicationsManager } from './author-applications-manager';
+import { AiRequestsManager } from './ai-requests-manager';
 import { YoungSpecialistManager } from './young-specialist-manager';
 
 type LoadState = 'loading' | 'unauth' | 'forbidden' | 'ready';
@@ -102,7 +103,7 @@ const navItems: Array<{
   { id: 'categories', label: 'Категории', icon: <FolderOpen className="w-5 h-5" />, ready: true },
   { id: 'subscriptions', label: 'Подписки', icon: <Crown className="w-5 h-5" />, ready: true },
   { id: 'referrals', label: 'Рефералы', icon: <Share2 className="w-5 h-5" />, ready: true },
-  { id: 'ai', label: 'AI-запросы', icon: <Bot className="w-5 h-5" />, ready: false },
+  { id: 'ai', label: 'AI-запросы', icon: <Bot className="w-5 h-5" />, ready: true },
   { id: 'users', label: 'Пользователи', icon: <Users className="w-5 h-5" />, ready: false },
   { id: 'young-specialist', label: 'Мол. специалист', icon: <HelpCircle className="w-5 h-5" />, ready: true },
 ];
@@ -117,6 +118,7 @@ const liveSections = new Set<AdminSection>([
   'categories',
   'subscriptions',
   'referrals',
+  'ai',
   'young-specialist',
 ]);
 
@@ -403,6 +405,7 @@ export function AdminClient() {
     if (activeSection === 'categories') return <CategoryManager />;
     if (activeSection === 'subscriptions') return <SubscriptionsManager />;
     if (activeSection === 'referrals') return <ReferralsManager />;
+    if (activeSection === 'ai') return <AiRequestsManager />;
     if (activeSection === 'young-specialist') return <YoungSpecialistManager />;
     return <DevelopmentNotice title={activeLabel} />;
   }
