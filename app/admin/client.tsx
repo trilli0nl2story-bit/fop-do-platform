@@ -34,6 +34,7 @@ import { ReferralsManager } from './referrals-manager';
 import { DocumentRequestsManager } from './document-requests-manager';
 import { AuthorApplicationsManager } from './author-applications-manager';
 import { AiRequestsManager } from './ai-requests-manager';
+import { AuthorsManager } from './authors-manager';
 import { YoungSpecialistManager } from './young-specialist-manager';
 import { UsersManager } from './users-manager';
 
@@ -98,7 +99,7 @@ const navItems: Array<{
   { id: 'revenue', label: 'Выручка', icon: <DollarSign className="w-5 h-5" />, ready: true },
   { id: 'orders', label: 'Заказы', icon: <Package className="w-5 h-5" />, ready: true },
   { id: 'document-requests', label: 'Заявки на документы', icon: <FileText className="w-5 h-5" />, ready: true },
-  { id: 'authors', label: 'Авторы', icon: <TrendingUp className="w-5 h-5" />, ready: false },
+  { id: 'authors', label: 'Авторы', icon: <TrendingUp className="w-5 h-5" />, ready: true },
   { id: 'applications', label: 'Авторские заявки', icon: <UserCheck className="w-5 h-5" />, ready: true },
   { id: 'documents', label: 'Документы', icon: <FileText className="w-5 h-5" />, ready: true },
   { id: 'categories', label: 'Категории', icon: <FolderOpen className="w-5 h-5" />, ready: true },
@@ -114,6 +115,7 @@ const liveSections = new Set<AdminSection>([
   'revenue',
   'orders',
   'document-requests',
+  'authors',
   'applications',
   'documents',
   'categories',
@@ -402,6 +404,7 @@ export function AdminClient() {
     if (activeSection === 'revenue') return <RevenueManager />;
     if (activeSection === 'orders') return <OrdersManager />;
     if (activeSection === 'document-requests') return <DocumentRequestsManager />;
+    if (activeSection === 'authors') return <AuthorsManager />;
     if (activeSection === 'applications') return <AuthorApplicationsManager />;
     if (activeSection === 'documents') return <MaterialFileManager />;
     if (activeSection === 'categories') return <CategoryManager />;
