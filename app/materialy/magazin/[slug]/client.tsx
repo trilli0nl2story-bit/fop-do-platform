@@ -7,6 +7,7 @@ import { Header } from '../../../../src/components/Header';
 import { StoreProductDetail } from '../../../../src/views/materials/StoreProductDetail';
 import { resolveRoute } from '../../../../src/lib/navigateRoute';
 import type { StoreProduct } from '../../../../src/data/storeProducts';
+import { useAuthSession } from '../../../../src/hooks/useAuthSession';
 
 interface ProductDetailClientProps {
   slug: string;
@@ -15,6 +16,7 @@ interface ProductDetailClientProps {
 
 export function ProductDetailClient({ slug, initialProduct = null }: ProductDetailClientProps) {
   const router = useRouter();
+  const { isAuthenticated } = useAuthSession();
 
   function onNavigate(page: string) {
     router.push(resolveRoute(page));
@@ -23,11 +25,11 @@ export function ProductDetailClient({ slug, initialProduct = null }: ProductDeta
   return (
     <CartProvider>
       <PostPurchaseDiscountProvider>
-        <Header currentPage="store-materials" onNavigate={onNavigate} isAuthenticated={false} />
+        <Header currentPage="store-materials" onNavigate={onNavigate} isAuthenticated={isAuthenticated} />
         <StoreProductDetail
           slug={slug}
           onNavigate={onNavigate}
-          isAuthenticated={false}
+          isAuthenticated={isAuthenticated}
           initialProduct={initialProduct}
         />
       </PostPurchaseDiscountProvider>
