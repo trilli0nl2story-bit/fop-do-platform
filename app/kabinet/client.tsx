@@ -58,6 +58,32 @@ interface AccountSummary {
   };
 }
 
+interface UserOrderDetail {
+  order: {
+    id: string;
+    status: string;
+    totalRubles: number;
+    discountRubles: number;
+    referralDiscountPercent: number;
+    couponCode: string | null;
+    createdAt: string;
+    paidAt: string | null;
+  };
+  payment: {
+    status: string;
+    provider: string;
+    providerPaymentId: string | null;
+    amountRubles: number;
+    paidAt: string | null;
+  } | null;
+  items: Array<{
+    materialId: string;
+    slug: string;
+    title: string;
+    priceRubles: number;
+  }>;
+}
+
 const SUBSCRIPTION_LABELS: Record<string, string> = {
   none: 'Подписка пока не подключена',
   expired: 'Подписка истекла',
@@ -72,6 +98,20 @@ const DOC_STATUS_LABELS: Record<string, string> = {
   under_review: 'На проверке',
   completed: 'Выполнена',
   rejected: 'Отклонена',
+};
+
+const ORDER_STATUS_LABELS: Record<string, string> = {
+  pending: 'Ожидает оплату',
+  paid: 'Оплачен',
+  cancelled: 'Отменён',
+  refunded: 'Возврат',
+};
+
+const PAYMENT_STATUS_LABELS: Record<string, string> = {
+  pending: 'Ожидает оплату',
+  succeeded: 'Оплачен',
+  failed: 'Ошибка',
+  refunded: 'Возврат',
 };
 
 function formatDate(iso: string) {
@@ -109,6 +149,9 @@ export function KabinetClient() {
   const [dlStates, setDlStates] = useState<Record<string, 'idle' | 'loading' | 'ok' | 'denied' | 'error'>>({});
   const [dlMessages, setDlMessages] = useState<Record<string, string>>({});
   const [dlUrls, setDlUrls] = useState<Record<string, string>>({});
+  const [expandedOrderId, setExpandedOrderId] = useState('');
+  const [orderDetails, setOrderDetails] = useState<Record<string, UserOrderDetail | null>>({});
+  const [orderDetailsLoadingId, setOrderDetailsLoadingId] = useState('');
 
   async function loadSummary() {
     setSummaryLoading(true);
@@ -262,6 +305,37 @@ export function KabinetClient() {
     }
 
     window.setTimeout(() => setReferralMessage(''), 2500);
+  }
+
+  async function handleToggleOrder(orderId: string) {
+    if (expandedOrderId === orderId) {
+      setExpandedOrderId('');
+      return;
+    }
+
+    setExpandedOrderId(orderId);
+    if (orderDetails[orderId]) {
+      return;
+    }
+
+    setOrderDetailsLoadingId(orderId);
+    try {
+      const response = await fetch(`/api/orders/${orderId}`, {
+        credentials: 'include',
+      });
+      const data = await response.json().catch(() => ({}));
+
+      if (!response.ok || !data?.order) {
+        setOrderDetails(prev => ({ ...prev, [orderId]: null }));
+        return;
+      }
+
+      setOrderDetails(prev => ({ ...prev, [orderId]: data.order as UserOrderDetail }));
+    } catch {
+      setOrderDetails(prev => ({ ...prev, [orderId]: null }));
+    } finally {
+      setOrderDetailsLoadingId('');
+    }
   }
 
   async function handleLogout() {
@@ -772,6 +846,68 @@ export function KabinetClient() {
                   </ul>
                 </div>
               )}
+            </div>
+          )}
+
+          {orders && orders.total > 0 && (
+            <div className="bg-white rounded-2xl border border-gray-200 shadow-sm p-5 sm:col-span-2">
+              <p className="text-xs font-semibold text-gray-500 uppercase tracking-wide mb-3">История заказов</p>
+              <div className="space-y-3">
+                {orders.items.map((order) => {
+                  const detail = orderDetails[order.id];
+                  const expanded = expandedOrderId === order.id;
+
+                  return (
+                    <div key={order.id} className="rounded-xl border border-gray-100 px-4 py-3">
+                      <button
+                        type="button"
+                        onClick={() => handleToggleOrder(order.id)}
+                        className="w-full text-left"
+                      >
+                        <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-2">
+                          <div>
+                            <p className="text-sm font-medium text-gray-800">
+                              {ORDER_STATUS_LABELS[order.status] ?? order.status}
+                            </p>
+                            <p className="text-xs text-gray-500">
+                              {formatDate(order.createdAt)}
+                            </p>
+                          </div>
+                          <p className="text-sm font-semibold text-gray-900">
+                            {order.totalRubles.toLocaleString('ru-RU')} ₽
+                          </p>
+                        </div>
+                      </button>
+
+                      {expanded && (
+                        <div className="mt-3 border-t border-gray-100 pt-3 space-y-2">
+                          {orderDetailsLoadingId === order.id ? (
+                            <p className="text-xs text-gray-400">Загружаем детали заказа...</p>
+                          ) : detail ? (
+                            <>
+                              {detail.payment && (
+                                <p className="text-xs text-gray-500">
+                                  Платёж: {PAYMENT_STATUS_LABELS[detail.payment.status] ?? detail.payment.status}
+                                  {' '}· {detail.payment.amountRubles.toLocaleString('ru-RU')} ₽
+                                </p>
+                              )}
+                              <ul className="space-y-1">
+                                {detail.items.map((item) => (
+                                  <li key={`${order.id}-${item.materialId}`} className="text-xs text-gray-500">
+                                    {item.title} · {item.priceRubles.toLocaleString('ru-RU')} ₽
+                                  </li>
+                                ))}
+                              </ul>
+                            </>
+                          ) : (
+                            <p className="text-xs text-red-500">Не удалось загрузить детали заказа.</p>
+                          )}
+                        </div>
+                      )}
+                    </div>
+                  );
+                })}
+              </div>
             </div>
           )}
 
