@@ -1,5 +1,13 @@
 import { useEffect, useMemo, useState } from 'react';
-import { AlertCircle, Check, Clock3, CreditCard, FileText, ShoppingCart, Tag, Trash2 } from 'lucide-react';
+import {
+  AlertCircle,
+  Clock3,
+  CreditCard,
+  FileText,
+  ShoppingCart,
+  Tag,
+  Trash2,
+} from 'lucide-react';
 import { Card } from '../components/Card';
 import { Button } from '../components/Button';
 import { Input } from '../components/Input';
@@ -24,7 +32,7 @@ function unavailableMessage(reason: 'not_found' | 'not_store' | 'not_published')
   return 'Материал не найден в каталоге.';
 }
 
-export function Cart({ onNavigate }: CartProps) {
+export function Cart({ onNavigate, isAuthenticated }: CartProps) {
   const {
     items,
     removeItem,
@@ -37,10 +45,70 @@ export function Cart({ onNavigate }: CartProps) {
     setReferralCode,
   } = useCart();
   const [referralDraft, setReferralDraft] = useState(referralCode);
+  const [checkoutLoading, setCheckoutLoading] = useState(false);
+  const [checkoutError, setCheckoutError] = useState<string | null>(null);
+  const [checkoutNotice, setCheckoutNotice] = useState<string | null>(null);
 
   useEffect(() => {
     setReferralDraft(referralCode);
   }, [referralCode]);
+
+  useEffect(() => {
+    if (typeof window === 'undefined') return;
+
+    const url = new URL(window.location.href);
+    const paymentState = url.searchParams.get('payment');
+    const orderId = url.searchParams.get('order');
+
+    if (!paymentState || !orderId) return;
+
+    if (paymentState === 'cancelled') {
+      setCheckoutNotice('Оплата не завершена. Заказ сохранён, к оплате можно вернуться позже.');
+      return;
+    }
+
+    if (paymentState !== 'success') return;
+
+    let cancelled = false;
+
+    async function loadOrderStatus() {
+      try {
+        const response = await fetch(`/api/orders/${orderId}`, {
+          credentials: 'include',
+        });
+        const data = await response.json().catch(() => ({}));
+
+        if (cancelled || !response.ok || !data?.order) {
+          setCheckoutNotice(
+            'Платёж отправлен в обработку. Как только Prodamus подтвердит оплату, доступ появится в кабинете.'
+          );
+          return;
+        }
+
+        if (data.order.order.status === 'paid') {
+          clearCart();
+          setCheckoutNotice('Оплата подтверждена. Материалы уже добавлены в ваш кабинет.');
+          return;
+        }
+
+        setCheckoutNotice(
+          'Платёж отправлен в обработку. Как только Prodamus подтвердит оплату, доступ появится в кабинете.'
+        );
+      } catch {
+        if (!cancelled) {
+          setCheckoutNotice(
+            'Платёж отправлен в обработку. Как только Prodamus подтвердит оплату, доступ появится в кабинете.'
+          );
+        }
+      }
+    }
+
+    void loadOrderStatus();
+
+    return () => {
+      cancelled = true;
+    };
+  }, [clearCart]);
 
   const quoteItemsBySlug = useMemo(() => {
     const map = new Map<string, NonNullable<typeof quote>['items'][number]>();
@@ -64,6 +132,48 @@ export function Cart({ onNavigate }: CartProps) {
     setReferralCode(referralDraft.trim());
   };
 
+  const handleCheckout = async () => {
+    if (!isAuthenticated) {
+      onNavigate('login');
+      return;
+    }
+
+    setCheckoutLoading(true);
+    setCheckoutError(null);
+    setCheckoutNotice(null);
+
+    try {
+      const response = await fetch('/api/orders/create', {
+        method: 'POST',
+        credentials: 'include',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          items: items
+            .map((item) => ({ slug: item.slug?.trim() ?? '' }))
+            .filter((item) => item.slug.length > 0),
+          referralCode: referralCode.trim() || null,
+        }),
+      });
+
+      const data = await response.json().catch(() => ({}));
+      if (!response.ok || typeof data?.paymentUrl !== 'string') {
+        throw new Error(data?.message || 'Не удалось подготовить оплату. Попробуйте ещё раз.');
+      }
+
+      window.location.assign(data.paymentUrl);
+    } catch (error) {
+      setCheckoutError(
+        error instanceof Error
+          ? error.message
+          : 'Не удалось подготовить оплату. Попробуйте ещё раз.'
+      );
+    } finally {
+      setCheckoutLoading(false);
+    }
+  };
+
   if (items.length === 0) {
     return (
       <div className="max-w-3xl mx-auto px-4 sm:px-6 lg:px-8 py-16 text-center">
@@ -71,7 +181,9 @@ export function Cart({ onNavigate }: CartProps) {
           <ShoppingCart className="w-10 h-10 text-gray-400" />
         </div>
         <h2 className="text-2xl font-bold text-gray-900 mb-3">Корзина пуста</h2>
-        <p className="text-gray-600 mb-6">Добавьте материалы из магазина, и мы сразу пересчитаем итоговую сумму на сервере.</p>
+        <p className="text-gray-600 mb-6">
+          Добавьте материалы из магазина, и мы сразу пересчитаем итоговую сумму на сервере.
+        </p>
         <Button onClick={() => onNavigate('store-materials')}>
           Перейти в магазин
         </Button>
@@ -90,9 +202,21 @@ export function Cart({ onNavigate }: CartProps) {
 
       <div className="grid lg:grid-cols-3 gap-6">
         <div className="lg:col-span-2 space-y-4">
+          {checkoutNotice && (
+            <div className="rounded-xl border border-green-200 bg-green-50 px-4 py-3 text-sm text-green-800">
+              {checkoutNotice}
+            </div>
+          )}
+
           {quoteError && (
             <div className="rounded-xl border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-800">
               {quoteError}
+            </div>
+          )}
+
+          {checkoutError && (
+            <div className="rounded-xl border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-800">
+              {checkoutError}
             </div>
           )}
 
@@ -230,13 +354,28 @@ export function Cart({ onNavigate }: CartProps) {
               </div>
             </div>
 
-            <Button className="w-full" size="lg" disabled>
+            <Button
+              className="w-full"
+              size="lg"
+              onClick={handleCheckout}
+              disabled={
+                checkoutLoading ||
+                quoteLoading ||
+                !quote?.checkoutReady ||
+                hasUnavailableItems
+              }
+            >
               <CreditCard className="w-5 h-5" />
-              Оплата через Prodamus скоро подключится
+              {checkoutLoading
+                ? 'Переходим к оплате...'
+                : isAuthenticated
+                  ? 'Оплатить через Prodamus'
+                  : 'Войти и оплатить'}
             </Button>
 
             <p className="mt-3 text-xs text-gray-500 leading-relaxed">
-              Мы уже перевели корзину на серверный пересчёт. Следующим шагом подключаем создание заказа и оплату через Prodamus, чтобы сумма и скидки подтверждались уже при оформлении.
+              Сумма заказа и скидки подтверждаются на сервере прямо перед оплатой. После возврата из Prodamus
+              мы проверяем статус заказа и автоматически открываем доступ в кабинете.
             </p>
 
             <button

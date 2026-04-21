@@ -104,6 +104,39 @@ export async function GET() {
       [userId]
     );
 
+    // ── Orders ────────────────────────────────────────────────────────────────
+    const orderStatsRes = await query<{
+      count: string;
+      paid_total_kopecks: string | null;
+    }>(
+      `
+        SELECT
+          COUNT(*) AS count,
+          COALESCE(SUM(total_amount) FILTER (WHERE status = 'paid'), 0) AS paid_total_kopecks
+        FROM orders
+        WHERE user_id = $1
+      `,
+      [userId]
+    );
+
+    const orderItemsRes = await query<{
+      id: string;
+      status: string;
+      total_amount: number | string;
+      discount_amount: number | string;
+      created_at: string;
+      paid_at: string | null;
+    }>(
+      `
+        SELECT id, status, total_amount, discount_amount, created_at, paid_at
+        FROM orders
+        WHERE user_id = $1
+        ORDER BY created_at DESC
+        LIMIT 5
+      `,
+      [userId]
+    );
+
     return NextResponse.json({
       user: {
         id: sessionUser.id,
@@ -142,6 +175,18 @@ export async function GET() {
           description: r.description,
           status: r.status,
           createdAt: new Date(r.created_at).toISOString(),
+        })),
+      },
+      orders: {
+        total: parseInt(orderStatsRes.rows[0]?.count ?? '0', 10),
+        paidTotalRubles: Math.round(parseInt(orderStatsRes.rows[0]?.paid_total_kopecks ?? '0', 10) / 100),
+        items: orderItemsRes.rows.map((row) => ({
+          id: row.id,
+          status: row.status,
+          totalRubles: Math.round(Number(row.total_amount ?? 0) / 100),
+          discountRubles: Math.round(Number(row.discount_amount ?? 0) / 100),
+          createdAt: new Date(row.created_at).toISOString(),
+          paidAt: row.paid_at ? new Date(row.paid_at).toISOString() : null,
         })),
       },
     });

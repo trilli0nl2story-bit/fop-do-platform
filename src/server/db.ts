@@ -13,7 +13,7 @@
  *   - Otherwise          → enable SSL only if DATABASE_URL contains sslmode=require
  */
 
-import { Pool, QueryResultRow } from 'pg';
+import { Pool, PoolClient, QueryResultRow } from 'pg';
 
 let pool: Pool | null = null;
 
@@ -64,6 +64,25 @@ export async function query<T extends QueryResultRow = Record<string, unknown>>(
   const client = getPool();
   const result = await client.query<T>(text, params);
   return { rows: result.rows, rowCount: result.rowCount ?? 0 };
+}
+
+export async function withTransaction<T>(
+  callback: (client: PoolClient) => Promise<T>
+): Promise<T> {
+  const pool = getPool();
+  const client = await pool.connect();
+
+  try {
+    await client.query('BEGIN');
+    const result = await callback(client);
+    await client.query('COMMIT');
+    return result;
+  } catch (error) {
+    await client.query('ROLLBACK');
+    throw error;
+  } finally {
+    client.release();
+  }
 }
 
 /**
