@@ -21,6 +21,19 @@ interface AccountSubscriptionSummary {
   };
 }
 
+interface SubscriptionOrderDetail {
+  order: {
+    id: string;
+    status: string;
+  };
+  payment: {
+    status: string;
+    provider: string;
+    amountRubles: number;
+    resumePaymentUrl: string | null;
+  } | null;
+}
+
 function formatDate(iso: string) {
   return new Date(iso).toLocaleDateString('ru-RU', {
     day: 'numeric',
@@ -28,6 +41,14 @@ function formatDate(iso: string) {
     year: 'numeric',
   });
 }
+
+const BENEFITS = [
+  'Доступ ко всем материалам по подписке',
+  'Скидка 25% на материалы из магазина',
+  '15 AI-запросов в месяц',
+  'Новые материалы добавляются регулярно',
+  'Продление срока срабатывает автоматически после оплаты',
+];
 
 export function PodpiskaCheckoutClient() {
   const router = useRouter();
@@ -39,6 +60,7 @@ export function PodpiskaCheckoutClient() {
   const [checkoutNotice, setCheckoutNotice] = useState('');
   const [summary, setSummary] = useState<AccountSubscriptionSummary | null>(null);
   const [summaryLoading, setSummaryLoading] = useState(false);
+  const [resumePaymentUrl, setResumePaymentUrl] = useState('');
 
   useEffect(() => {
     if (!isAuthenticated) return;
@@ -57,25 +79,26 @@ export function PodpiskaCheckoutClient() {
     const paymentState = searchParams.get('payment');
     const orderId = searchParams.get('order');
     if (!paymentState || !orderId) return;
+    if (paymentState !== 'success' && paymentState !== 'cancelled') return;
 
-    if (paymentState === 'cancelled') {
-      setCheckoutNotice('Оплата подписки не завершена. Заказ сохранён, к нему можно вернуться позже.');
-      return;
-    }
-
-    if (paymentState !== 'success') return;
-
-    let cancelled = false;
+    setResumePaymentUrl('');
+    let disposed = false;
 
     async function loadOrderStatus() {
       try {
         const response = await fetch(`/api/orders/${orderId}`, {
           credentials: 'include',
         });
-        const data = await response.json().catch(() => ({}));
+        const data = (await response.json().catch(() => ({}))) as {
+          order?: SubscriptionOrderDetail;
+        };
 
-        if (cancelled || !response.ok || !data?.order) {
-          setCheckoutNotice('Платёж отправлен в обработку. Как только Prodamus подтвердит оплату, подписка активируется автоматически.');
+        if (disposed || !response.ok || !data.order) {
+          setCheckoutNotice(
+            paymentState === 'cancelled'
+              ? 'Оплата подписки не завершена. Заказ сохранён, но его текущий статус пока не удалось уточнить.'
+              : 'Платёж отправлен в обработку. Как только Prodamus подтвердит оплату, подписка активируется автоматически.'
+          );
           return;
         }
 
@@ -83,19 +106,37 @@ export function PodpiskaCheckoutClient() {
           setCheckoutNotice('Подписка оплачена. Статус обновится в кабинете автоматически.');
           setSummaryLoading(true);
           const refreshed = await fetch('/api/account/summary', { credentials: 'include' });
-          if (refreshed.ok && !cancelled) {
-            setSummary(await refreshed.json());
+          if (refreshed.ok && !disposed) {
+            setSummary((await refreshed.json()) as AccountSubscriptionSummary);
           }
           return;
         }
 
-        setCheckoutNotice('Платёж отправлен в обработку. Как только Prodamus подтвердит оплату, подписка активируется автоматически.');
+        if (data.order.payment?.resumePaymentUrl) {
+          setResumePaymentUrl(data.order.payment.resumePaymentUrl);
+          setCheckoutNotice(
+            paymentState === 'cancelled'
+              ? 'Оплата подписки не завершена. Можно вернуться к оплате по сохранённой ссылке.'
+              : 'Платёж пока не завершён. Можно открыть сохранённую ссылку и продолжить оплату.'
+          );
+          return;
+        }
+
+        setCheckoutNotice(
+          paymentState === 'cancelled'
+            ? 'Оплата подписки не завершена. Заказ сохранён, к нему можно вернуться позже из кабинета.'
+            : 'Платёж отправлен в обработку. Как только Prodamus подтвердит оплату, подписка активируется автоматически.'
+        );
       } catch {
-        if (!cancelled) {
-          setCheckoutNotice('Платёж отправлен в обработку. Как только Prodamus подтвердит оплату, подписка активируется автоматически.');
+        if (!disposed) {
+          setCheckoutNotice(
+            paymentState === 'cancelled'
+              ? 'Оплата подписки не завершена. Статус заказа временно недоступен.'
+              : 'Платёж отправлен в обработку. Как только Prodamus подтвердит оплату, подписка активируется автоматически.'
+          );
         }
       } finally {
-        if (!cancelled) {
+        if (!disposed) {
           setSummaryLoading(false);
         }
       }
@@ -104,7 +145,7 @@ export function PodpiskaCheckoutClient() {
     void loadOrderStatus();
 
     return () => {
-      cancelled = true;
+      disposed = true;
     };
   }, [isAuthenticated, searchParams]);
 
@@ -112,6 +153,11 @@ export function PodpiskaCheckoutClient() {
     () => SUBSCRIPTION_PLANS.find((plan) => plan.id === selectedPlan) ?? SUBSCRIPTION_PLANS[0],
     [selectedPlan]
   );
+
+  const activePlanLabel = useMemo(() => {
+    const activePlan = SUBSCRIPTION_PLANS.find((plan) => plan.id === summary?.subscription.planCode);
+    return activePlan?.label ?? null;
+  }, [summary?.subscription.planCode]);
 
   async function handleCheckout() {
     if (!isAuthenticated) {
@@ -122,6 +168,7 @@ export function PodpiskaCheckoutClient() {
     setCheckoutLoading(true);
     setCheckoutError('');
     setCheckoutNotice('');
+    setResumePaymentUrl('');
 
     try {
       const response = await fetch('/api/subscriptions/create', {
@@ -135,7 +182,9 @@ export function PodpiskaCheckoutClient() {
 
       const data = await response.json().catch(() => ({}));
       if (!response.ok || typeof data?.paymentUrl !== 'string') {
-        throw new Error(data?.message || 'Не удалось подготовить оплату подписки. Попробуйте ещё раз.');
+        throw new Error(
+          data?.message || 'Не удалось подготовить оплату подписки. Попробуйте ещё раз.'
+        );
       }
 
       window.location.assign(data.paymentUrl);
@@ -160,21 +209,21 @@ export function PodpiskaCheckoutClient() {
 
   return (
     <div className="min-h-screen bg-gray-50">
-      <div className="max-w-5xl mx-auto px-4 sm:px-6 py-8 space-y-6">
+      <div className="max-w-5xl mx-auto px-4 py-8 sm:px-6 space-y-6">
         <div className="flex items-center justify-between gap-4">
           <div>
-            <div className="inline-flex items-center gap-2 px-3 py-1 rounded-full bg-amber-50 text-amber-700 text-xs font-semibold mb-3">
-              <Crown className="w-3.5 h-3.5" />
+            <div className="inline-flex items-center gap-2 rounded-full bg-amber-50 px-3 py-1 text-xs font-semibold text-amber-700 mb-3">
+              <Crown className="h-3.5 w-3.5" />
               Подписка платформы
             </div>
             <h1 className="text-3xl font-bold text-gray-900">Оформить подписку</h1>
-            <p className="text-sm text-gray-500 mt-2">
+            <p className="mt-2 text-sm text-gray-500">
               Библиотека материалов по подписке, 15 AI-запросов в месяц и скидка 25% на магазин.
             </p>
           </div>
           <Link
             href="/materialy/podpiska"
-            className="inline-flex items-center px-4 py-2 border border-gray-200 bg-white hover:border-gray-300 text-sm font-medium text-gray-700 rounded-xl"
+            className="inline-flex items-center rounded-xl border border-gray-200 bg-white px-4 py-2 text-sm font-medium text-gray-700 hover:border-gray-300"
           >
             К материалам подписки
           </Link>
@@ -182,7 +231,18 @@ export function PodpiskaCheckoutClient() {
 
         {checkoutNotice && (
           <div className="rounded-2xl border border-green-200 bg-green-50 px-4 py-3 text-sm text-green-800">
-            {checkoutNotice}
+            <p>{checkoutNotice}</p>
+            {resumePaymentUrl && (
+              <div className="mt-3">
+                <button
+                  type="button"
+                  onClick={() => window.location.assign(resumePaymentUrl)}
+                  className="inline-flex items-center justify-center rounded-xl bg-white px-4 py-2 text-sm font-medium text-green-800 hover:bg-green-100"
+                >
+                  Продолжить оплату
+                </button>
+              </div>
+            )}
           </div>
         )}
 
@@ -195,28 +255,29 @@ export function PodpiskaCheckoutClient() {
         {summary?.subscription.status === 'active' && (
           <div className="rounded-2xl border border-blue-200 bg-blue-50 px-4 py-4">
             <div className="flex items-start gap-3">
-              <ShieldCheck className="w-5 h-5 text-blue-600 mt-0.5" />
+              <ShieldCheck className="mt-0.5 h-5 w-5 text-blue-600" />
               <div>
                 <p className="text-sm font-semibold text-blue-900">Подписка уже активна</p>
-                <p className="text-sm text-blue-800 mt-1">
+                <p className="mt-1 text-sm text-blue-800">
+                  {activePlanLabel ? `Текущий тариф: ${activePlanLabel}. ` : ''}
                   {summary.subscription.currentPeriodEnd
                     ? `Текущий доступ действует до ${formatDate(summary.subscription.currentPeriodEnd)}.`
-                    : 'Доступ уже активирован.'}
-                  {' '}Если оплатить новый тариф сейчас, срок продлится автоматически.
+                    : 'Доступ уже активирован.'}{' '}
+                  Если оплатить новый тариф сейчас, срок продлится автоматически.
                 </p>
               </div>
             </div>
           </div>
         )}
 
-        <div className="grid lg:grid-cols-[1.2fr,0.8fr] gap-6">
-          <section className="bg-white rounded-2xl border border-gray-200 shadow-sm p-5">
-            <div className="flex items-center gap-2 mb-4">
-              <Sparkles className="w-5 h-5 text-amber-500" />
+        <div className="grid gap-6 lg:grid-cols-[1.2fr,0.8fr]">
+          <section className="rounded-2xl border border-gray-200 bg-white p-5 shadow-sm">
+            <div className="mb-4 flex items-center gap-2">
+              <Sparkles className="h-5 w-5 text-amber-500" />
               <h2 className="text-lg font-semibold text-gray-900">Выберите тариф</h2>
             </div>
 
-            <div className="grid sm:grid-cols-2 gap-4">
+            <div className="grid gap-4 sm:grid-cols-2">
               {SUBSCRIPTION_PLANS.map((plan) => {
                 const totalRubles = getSubscriptionPlanTotalRubles(plan);
                 const monthlyRubles = getSubscriptionPlanMonthlyRubles(plan);
@@ -236,21 +297,22 @@ export function PodpiskaCheckoutClient() {
                     <div className="flex items-start justify-between gap-3">
                       <div>
                         <p className="text-sm font-semibold text-gray-900">{plan.label}</p>
-                        <p className="text-xs text-gray-500 mt-1">
+                        <p className="mt-1 text-xs text-gray-500">
                           {monthlyRubles.toLocaleString('ru-RU')} ₽ / месяц
                         </p>
                       </div>
                       {plan.discountPercent > 0 && (
-                        <span className="inline-flex px-2 py-1 rounded-full bg-green-50 text-green-700 text-xs font-semibold">
-                          −{plan.discountPercent}%
+                        <span className="inline-flex rounded-full bg-green-50 px-2 py-1 text-xs font-semibold text-green-700">
+                          -{plan.discountPercent}%
                         </span>
                       )}
                     </div>
-                    <p className="text-2xl font-bold text-gray-900 mt-4">
+                    <p className="mt-4 text-2xl font-bold text-gray-900">
                       {totalRubles.toLocaleString('ru-RU')} ₽
                     </p>
-                    <p className="text-xs text-gray-500 mt-2">
-                      Продление произойдёт на {plan.months} {plan.months === 1 ? 'месяц' : plan.months < 5 ? 'месяца' : 'месяцев'}
+                    <p className="mt-2 text-xs text-gray-500">
+                      Продление произойдёт на {plan.months}{' '}
+                      {plan.months === 1 ? 'месяц' : plan.months < 5 ? 'месяца' : 'месяцев'}
                     </p>
                   </button>
                 );
@@ -258,24 +320,18 @@ export function PodpiskaCheckoutClient() {
             </div>
           </section>
 
-          <aside className="bg-white rounded-2xl border border-gray-200 shadow-sm p-5 h-fit">
-            <h2 className="text-lg font-semibold text-gray-900 mb-4">Что входит</h2>
+          <aside className="h-fit rounded-2xl border border-gray-200 bg-white p-5 shadow-sm">
+            <h2 className="mb-4 text-lg font-semibold text-gray-900">Что входит</h2>
             <ul className="space-y-3 text-sm text-gray-700">
-              {[
-                'Доступ ко всем материалам по подписке',
-                'Скидка 25% на материалы из магазина',
-                '15 AI-запросов в месяц',
-                'Новые материалы добавляются регулярно',
-                'Продление срока работает автоматически после оплаты',
-              ].map((item) => (
+              {BENEFITS.map((item) => (
                 <li key={item} className="flex items-start gap-2">
-                  <CheckCircle2 className="w-4 h-4 text-green-600 mt-0.5 flex-shrink-0" />
+                  <CheckCircle2 className="mt-0.5 h-4 w-4 flex-shrink-0 text-green-600" />
                   <span>{item}</span>
                 </li>
               ))}
             </ul>
 
-            <div className="border-t border-gray-100 mt-5 pt-5">
+            <div className="mt-5 border-t border-gray-100 pt-5">
               <div className="flex items-end justify-between gap-3">
                 <div>
                   <p className="text-sm text-gray-500">К оплате</p>
@@ -293,12 +349,17 @@ export function PodpiskaCheckoutClient() {
                 type="button"
                 onClick={handleCheckout}
                 disabled={checkoutLoading || summaryLoading}
-                className="mt-5 w-full inline-flex items-center justify-center px-4 py-3 bg-amber-500 hover:bg-amber-600 text-white font-semibold rounded-xl transition-colors disabled:opacity-50"
+                className="mt-5 inline-flex w-full items-center justify-center rounded-xl bg-amber-500 px-4 py-3 font-semibold text-white transition-colors hover:bg-amber-600 disabled:opacity-50"
               >
-                {checkoutLoading ? 'Переходим к оплате...' : isAuthenticated ? 'Оплатить через Prodamus' : 'Войти и оформить'}
+                {checkoutLoading
+                  ? 'Переходим к оплате...'
+                  : isAuthenticated
+                    ? 'Оплатить через Prodamus'
+                    : 'Войти и оформить'}
               </button>
-              <p className="mt-3 text-xs text-gray-500 leading-relaxed">
-                Сумма и срок подписки подтверждаются на сервере. После возврата из Prodamus статус обновится автоматически.
+              <p className="mt-3 text-xs leading-relaxed text-gray-500">
+                Сумма и срок подписки подтверждаются на сервере. После возврата из Prodamus
+                статус обновится автоматически.
               </p>
             </div>
           </aside>
