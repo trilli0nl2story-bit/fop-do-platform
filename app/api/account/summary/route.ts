@@ -1,6 +1,7 @@
 import { NextResponse } from 'next/server';
 import { getCurrentUser } from '@/src/server/auth';
 import { query } from '@/src/server/db';
+import { isEmailDeliveryConfigured } from '@/src/server/email';
 
 export const dynamic = 'force-dynamic';
 
@@ -12,6 +13,12 @@ export async function GET() {
     }
 
     const userId = sessionUser.id;
+
+    const userRes = await query<{ email_verified_at: string | null }>(
+      'SELECT email_verified_at FROM users WHERE id = $1 LIMIT 1',
+      [userId]
+    );
+    const emailVerified = Boolean(userRes.rows[0]?.email_verified_at);
 
     // ── Profile ──────────────────────────────────────────────────────────────
     const profileRes = await query<{
@@ -98,7 +105,15 @@ export async function GET() {
     );
 
     return NextResponse.json({
-      user: { id: sessionUser.id, email: sessionUser.email, isAdmin: sessionUser.isAdmin },
+      user: {
+        id: sessionUser.id,
+        email: sessionUser.email,
+        isAdmin: sessionUser.isAdmin,
+        emailVerified,
+      },
+      emailVerification: {
+        deliveryConfigured: isEmailDeliveryConfigured(),
+      },
       profile: {
         name: p?.name ?? '',
         lastName: p?.last_name ?? '',

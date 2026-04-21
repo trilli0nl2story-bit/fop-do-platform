@@ -1,4 +1,5 @@
 import { useState } from 'react';
+import { useSearchParams } from 'next/navigation';
 import { Button } from '../components/Button';
 import { Input } from '../components/Input';
 
@@ -10,6 +11,7 @@ interface LoginProps {
 const SERVER_NOT_READY = 'Сервер авторизации ещё не настроен. Попробуйте позже.';
 
 export function Login({ onNavigate, onLogin }: LoginProps) {
+  const searchParams = useSearchParams();
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [loading, setLoading] = useState(false);
@@ -56,6 +58,18 @@ export function Login({ onNavigate, onLogin }: LoginProps) {
         </div>
 
         <div className="bg-white rounded-2xl p-8 border border-gray-200 shadow-sm">
+          {searchParams.get('emailVerification') === 'success' && (
+            <div className="mb-5 text-sm text-green-700 bg-green-50 border border-green-200 rounded-xl px-4 py-3">
+              Почта подтверждена. Теперь можно войти в аккаунт.
+            </div>
+          )}
+
+          {searchParams.get('emailVerification') === 'invalid' && (
+            <div className="mb-5 text-sm text-red-600 bg-red-50 border border-red-200 rounded-xl px-4 py-3">
+              Ссылка подтверждения недействительна или уже устарела. Войдите в аккаунт и запросите новое письмо.
+            </div>
+          )}
+
           <form onSubmit={handleSubmit} className="space-y-5">
             <Input
               type="email"

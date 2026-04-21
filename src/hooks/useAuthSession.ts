@@ -6,6 +6,7 @@ export interface AuthUser {
   id: string;
   email: string;
   isAdmin: boolean;
+  emailVerified: boolean;
 }
 
 export interface AuthSession {

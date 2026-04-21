@@ -10,6 +10,8 @@ import {
   rateLimitResponse,
   requireTrustedOrigin,
 } from '@/src/server/security';
+import { verifyCaptchaToken } from '@/src/server/captcha';
+import { issueEmailVerification } from '@/src/server/emailVerification';
 
 export async function POST(req: NextRequest) {
   const originError = requireTrustedOrigin(req);
@@ -32,6 +34,14 @@ export async function POST(req: NextRequest) {
     body = await req.json();
   } catch {
     return NextResponse.json({ error: 'Некорректный запрос' }, { status: 400 });
+  }
+
+  const captchaResult = await verifyCaptchaToken(req, body.captchaToken);
+  if (!captchaResult.ok) {
+    return NextResponse.json(
+      { error: captchaResult.message ?? 'Не удалось пройти проверку.' },
+      { status: 400 }
+    );
   }
 
   const { name, role, city, email, password } = body;
@@ -82,15 +92,19 @@ export async function POST(req: NextRequest) {
       email: string;
       is_admin: boolean;
     }>(
-      `INSERT INTO users (email, password_hash, is_admin, created_at, updated_at)
-       VALUES ($1, $2, false, now(), now())
-       RETURNING id, email, is_admin`,
+      `
+        INSERT INTO users (email, password_hash, is_admin, email_verified_at, created_at, updated_at)
+        VALUES ($1, $2, false, null, now(), now())
+        RETURNING id, email, is_admin
+      `,
       [normalizedEmail, passwordHash]
     );
 
     await query(
-      `INSERT INTO user_profiles (id, name, role, city, updated_at)
-       VALUES ($1, $2, $3, $4, now())`,
+      `
+        INSERT INTO user_profiles (id, name, role, city, updated_at)
+        VALUES ($1, $2, $3, $4, now())
+      `,
       [
         user.id,
         typeof name === 'string' ? name.trim() : '',
@@ -99,14 +113,43 @@ export async function POST(req: NextRequest) {
       ]
     );
 
+    let delivery: { delivered: boolean; mode: 'smtp' | 'disabled' } = {
+      delivered: false,
+      mode: 'disabled',
+    };
+    try {
+      delivery = await issueEmailVerification({
+        userId: user.id,
+        email: user.email,
+        requestOrigin: new URL(req.url).origin,
+      });
+    } catch (emailError) {
+      console.error(
+        '[api/auth/register] verification email failed',
+        emailError instanceof Error ? emailError.message : String(emailError)
+      );
+    }
+
     const token = await createSessionToken({
       id: user.id,
       email: user.email,
       isAdmin: user.is_admin,
+      emailVerified: false,
     });
 
     const response = NextResponse.json(
-      { user: { id: user.id, email: user.email, isAdmin: user.is_admin } },
+      {
+        user: {
+          id: user.id,
+          email: user.email,
+          isAdmin: user.is_admin,
+          emailVerified: false,
+        },
+        verification: {
+          sent: delivery.delivered,
+          deliveryMode: delivery.mode,
+        },
+      },
       { status: 201 }
     );
     setSessionCookie(response, token);

@@ -1,36 +1,22 @@
-/**
- * Server-only auth helpers.
- * Import only in API routes and server components — never in client components.
- *
- * Session strategy: signed JWT stored in an httpOnly cookie.
- *   - Signed with SESSION_SECRET using HS256 (via jose).
- *   - 30-day expiry.
- *   - Never contains the password hash.
- */
-
 import bcrypt from 'bcryptjs';
 import { SignJWT, jwtVerify } from 'jose';
 import { cookies } from 'next/headers';
 import { NextResponse } from 'next/server';
 
 export const SESSION_COOKIE = 'metod_session';
-const COOKIE_MAX_AGE      = 30 * 24 * 60 * 60; // 30 days in seconds
-const SALT_ROUNDS         = 12;
-
-// ── Secret key ────────────────────────────────────────────────────────────────
+const COOKIE_MAX_AGE = 30 * 24 * 60 * 60;
+const SALT_ROUNDS = 12;
 
 function getSecret(): Uint8Array {
   const secret = process.env.SESSION_SECRET;
   if (!secret) {
     throw new Error(
-      '[auth] SESSION_SECRET is not set. ' +
-      'Generate one with: openssl rand -hex 32'
+      '[auth] SESSION_SECRET is not set. Generate one with: openssl rand -hex 32'
     );
   }
+
   return new TextEncoder().encode(secret);
 }
-
-// ── Password helpers ──────────────────────────────────────────────────────────
 
 export async function hashPassword(password: string): Promise<string> {
   return bcrypt.hash(password, SALT_ROUNDS);
@@ -43,17 +29,19 @@ export async function verifyPassword(
   return bcrypt.compare(password, hash);
 }
 
-// ── JWT / session ─────────────────────────────────────────────────────────────
-
 export interface SessionUser {
   id: string;
   email: string;
   isAdmin: boolean;
+  emailVerified: boolean;
 }
 
-/** Create a signed JWT for the given user. */
 export async function createSessionToken(user: SessionUser): Promise<string> {
-  return new SignJWT({ email: user.email, isAdmin: user.isAdmin })
+  return new SignJWT({
+    email: user.email,
+    isAdmin: user.isAdmin,
+    emailVerified: user.emailVerified,
+  })
     .setProtectedHeader({ alg: 'HS256' })
     .setSubject(user.id)
     .setIssuedAt()
@@ -61,7 +49,6 @@ export async function createSessionToken(user: SessionUser): Promise<string> {
     .sign(getSecret());
 }
 
-/** Verify a JWT string. Returns the payload or null if invalid/expired. */
 export async function verifySessionToken(
   token: string
 ): Promise<SessionUser | null> {
@@ -73,17 +60,18 @@ export async function verifySessionToken(
     ) {
       return null;
     }
+
     return {
       id: payload.sub,
       email: payload.email,
       isAdmin: payload.isAdmin === true,
+      emailVerified: payload.emailVerified === true,
     };
   } catch {
     return null;
   }
 }
 
-/** Read the session cookie and return the current user, or null. */
 export async function getCurrentUser(): Promise<SessionUser | null> {
   try {
     const cookieStore = await cookies();
@@ -95,9 +83,6 @@ export async function getCurrentUser(): Promise<SessionUser | null> {
   }
 }
 
-// ── Cookie helpers ────────────────────────────────────────────────────────────
-
-/** Attach the session cookie to a NextResponse. */
 export function setSessionCookie(
   response: NextResponse,
   token: string
@@ -111,7 +96,6 @@ export function setSessionCookie(
   });
 }
 
-/** Clear the session cookie on a NextResponse. */
 export function clearSessionCookie(response: NextResponse): void {
   response.cookies.set(SESSION_COOKIE, '', {
     httpOnly: true,

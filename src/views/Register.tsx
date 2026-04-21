@@ -2,6 +2,7 @@ import { useState } from 'react';
 import { ConsentCheckbox } from '../components/ConsentCheckbox';
 import { Check, Download } from 'lucide-react';
 import { saveProfile, loadProfile } from '../lib/userProfile';
+import { TurnstileField, isTurnstileEnabled } from '../components/TurnstileField';
 
 interface RegisterProps {
   onNavigate: (page: string) => void;
@@ -26,8 +27,12 @@ export function Register({ onNavigate, onRegister, downloadContext }: RegisterPr
   const [city, setCity] = useState('');
   const [selectedRole, setSelectedRole] = useState('');
   const [consentGiven, setConsentGiven] = useState(false);
+  const [captchaToken, setCaptchaToken] = useState('');
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
+  const [verificationNote, setVerificationNote] = useState('');
+
+  const captchaRequired = isTurnstileEnabled();
 
   const canSubmit =
     name.trim().length > 0 &&
@@ -36,12 +41,14 @@ export function Register({ onNavigate, onRegister, downloadContext }: RegisterPr
     city.trim().length > 0 &&
     selectedRole !== '' &&
     consentGiven &&
+    (!captchaRequired || captchaToken.trim().length > 0) &&
     !loading;
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!canSubmit) return;
     setError('');
+    setVerificationNote('');
     setLoading(true);
 
     const roleLabel = ROLES.find(r => r.value === selectedRole)?.label ?? selectedRole;
@@ -56,6 +63,7 @@ export function Register({ onNavigate, onRegister, downloadContext }: RegisterPr
           city: city.trim(),
           email: email.trim(),
           password,
+          captchaToken,
         }),
       });
 
@@ -82,6 +90,9 @@ export function Register({ onNavigate, onRegister, downloadContext }: RegisterPr
       });
 
       onRegister();
+      if (data?.verification?.sent === false) {
+        setVerificationNote('Аккаунт создан, но отправка писем пока не настроена на сервере. Подтверждение почты станет доступно после подключения SMTP.');
+      }
       onNavigate('dashboard');
     } catch {
       setError('Не удалось подключиться к серверу. Проверьте интернет-соединение.');
@@ -198,9 +209,17 @@ export function Register({ onNavigate, onRegister, downloadContext }: RegisterPr
               onNavigate={onNavigate}
             />
 
+            <TurnstileField value={captchaToken} onChange={setCaptchaToken} />
+
             {error && (
               <p className="text-sm text-red-600 bg-red-50 border border-red-100 rounded-xl px-4 py-3">
                 {error}
+              </p>
+            )}
+
+            {verificationNote && (
+              <p className="text-sm text-amber-800 bg-amber-50 border border-amber-100 rounded-xl px-4 py-3">
+                {verificationNote}
               </p>
             )}
 

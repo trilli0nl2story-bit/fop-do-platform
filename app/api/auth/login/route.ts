@@ -64,13 +64,17 @@ export async function POST(req: NextRequest) {
       email: string;
       password_hash: string;
       is_admin: boolean;
+      email_verified_at: string | null;
     }>(
-      'SELECT id, email, password_hash, is_admin FROM users WHERE email = $1',
+      `
+        SELECT id, email, password_hash, is_admin, email_verified_at
+        FROM users
+        WHERE email = $1
+      `,
       [normalizedEmail]
     );
 
     const user = rows[0];
-
     const dummyHash =
       '$2b$12$AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA';
     const passwordHash = user?.password_hash ?? dummyHash;
@@ -87,10 +91,16 @@ export async function POST(req: NextRequest) {
       id: user.id,
       email: user.email,
       isAdmin: user.is_admin,
+      emailVerified: Boolean(user.email_verified_at),
     });
 
     const response = NextResponse.json({
-      user: { id: user.id, email: user.email, isAdmin: user.is_admin },
+      user: {
+        id: user.id,
+        email: user.email,
+        isAdmin: user.is_admin,
+        emailVerified: Boolean(user.email_verified_at),
+      },
     });
     setSessionCookie(response, token);
     return response;

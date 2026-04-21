@@ -1,13 +1,16 @@
 'use client';
 
 import { useState, useEffect } from 'react';
-import { useRouter } from 'next/navigation';
+import { useRouter, useSearchParams } from 'next/navigation';
 import Link from 'next/link';
 import { LogOut, BookOpen, Star, FileText, ShoppingBag, User, MapPin, Briefcase, Building, Download, Loader2, CheckCircle2 } from 'lucide-react';
 import { useAuthSession } from '../../src/hooks/useAuthSession';
 
 interface AccountSummary {
-  user: { id: string; email: string; isAdmin: boolean };
+  user: { id: string; email: string; isAdmin: boolean; emailVerified: boolean };
+  emailVerification: {
+    deliveryConfigured: boolean;
+  };
   profile: {
     name: string; lastName: string; patronymic: string;
     role: string; city: string; institution: string; phone: string;
@@ -52,12 +55,16 @@ function formatDate(iso: string) {
 
 export function KabinetClient() {
   const router = useRouter();
+  const searchParams = useSearchParams();
   const { user, isAuthenticated, loading, refresh } = useAuthSession();
   const [logoutLoading, setLogoutLoading] = useState(false);
   const [logoutError, setLogoutError] = useState('');
   const [summary, setSummary] = useState<AccountSummary | null>(null);
   const [summaryLoading, setSummaryLoading] = useState(false);
   const [summaryError, setSummaryError] = useState('');
+  const [verifyLoading, setVerifyLoading] = useState(false);
+  const [verifyMessage, setVerifyMessage] = useState('');
+  const [verifyError, setVerifyError] = useState('');
   const [dlStates, setDlStates] = useState<Record<string, 'idle' | 'loading' | 'ok' | 'denied' | 'error'>>({});
   const [dlMessages, setDlMessages] = useState<Record<string, string>>({});
   const [dlUrls, setDlUrls] = useState<Record<string, string>>({});
@@ -91,6 +98,35 @@ export function KabinetClient() {
     } catch {
       setDlStates(prev => ({ ...prev, [slug]: 'error' }));
       setDlMessages(prev => ({ ...prev, [slug]: 'Не удалось открыть материал. Попробуйте ещё раз.' }));
+    }
+  }
+
+  async function handleResendVerification() {
+    setVerifyLoading(true);
+    setVerifyError('');
+    setVerifyMessage('');
+    try {
+      const res = await fetch('/api/auth/verify-email/resend', {
+        method: 'POST',
+        credentials: 'include',
+      });
+      const data = await res.json().catch(() => ({}));
+
+      if (!res.ok) {
+        setVerifyError(
+          data.message ?? data.error ?? 'Не удалось отправить письмо. Попробуйте ещё раз.'
+        );
+        return;
+      }
+
+      setVerifyMessage(
+        data.message ??
+          'Письмо для подтверждения отправлено. Проверьте почту и папку со спамом.'
+      );
+    } catch {
+      setVerifyError('Не удалось отправить письмо. Проверьте соединение и попробуйте ещё раз.');
+    } finally {
+      setVerifyLoading(false);
     }
   }
 
@@ -199,6 +235,46 @@ export function KabinetClient() {
         {summaryError && (
           <div className="bg-amber-50 border border-amber-200 rounded-xl px-4 py-3 text-sm text-amber-800">
             {summaryError}
+          </div>
+        )}
+
+        {searchParams.get('emailVerification') === 'success' && (
+          <div className="bg-green-50 border border-green-200 rounded-xl px-4 py-3 text-sm text-green-800">
+            Почта подтверждена. Теперь аккаунт полностью активирован.
+          </div>
+        )}
+
+        {summary && !summary.user.emailVerified && (
+          <div className="bg-amber-50 border border-amber-200 rounded-2xl px-4 py-4">
+            <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
+              <div className="space-y-1">
+                <p className="text-sm font-semibold text-amber-900">
+                  Подтвердите email, чтобы завершить настройку аккаунта
+                </p>
+                <p className="text-sm text-amber-800">
+                  {summary.emailVerification.deliveryConfigured
+                    ? `Мы отправили письмо на ${summary.user.email}. Если письма нет, проверьте папку со спамом или отправьте его повторно.`
+                    : 'Аккаунт уже создан, но отправка писем на сервере пока не подключена. После настройки SMTP здесь можно будет сразу отправить письмо для подтверждения.'}
+                </p>
+              </div>
+              <button
+                onClick={handleResendVerification}
+                disabled={verifyLoading || !summary.emailVerification.deliveryConfigured}
+                className="inline-flex items-center justify-center px-4 py-2 bg-amber-500 hover:bg-amber-600 text-white text-sm font-medium rounded-xl transition-colors disabled:opacity-50"
+              >
+                {verifyLoading
+                  ? 'Отправка...'
+                  : summary.emailVerification.deliveryConfigured
+                    ? 'Отправить письмо ещё раз'
+                    : 'Письма пока не подключены'}
+              </button>
+            </div>
+            {verifyMessage && (
+              <p className="mt-3 text-sm text-green-700">{verifyMessage}</p>
+            )}
+            {verifyError && (
+              <p className="mt-3 text-sm text-red-600">{verifyError}</p>
+            )}
           </div>
         )}
 
