@@ -44,6 +44,33 @@ async function resolveYandexDiskDownloadUrl(source: string): Promise<string | nu
   return typeof data?.href === 'string' && data.href.trim() ? data.href.trim() : null;
 }
 
+async function proxyImageResponse(url: string): Promise<NextResponse | null> {
+  const upstream = await fetch(url, {
+    headers: {
+      Accept: 'image/avif,image/webp,image/apng,image/svg+xml,image/*,*/*;q=0.8',
+      'User-Agent': 'Mozilla/5.0 (compatible; metodcab-bot/1.0)',
+    },
+    cache: 'no-store',
+  });
+
+  if (!upstream.ok) return null;
+
+  const contentType = upstream.headers.get('content-type')?.split(';')[0]?.trim().toLowerCase() ?? '';
+  if (!contentType.startsWith('image/')) return null;
+
+  const body = await upstream.arrayBuffer();
+  const response = new NextResponse(body, {
+    status: 200,
+    headers: {
+      'Content-Type': contentType,
+      'Cache-Control': 'public, max-age=300, s-maxage=300',
+      'Content-Disposition': 'inline',
+    },
+  });
+
+  return response;
+}
+
 export async function GET(request: Request) {
   const source = new URL(request.url).searchParams.get('source')?.trim() ?? '';
   if (!source || !isYandexDiskPublicAssetUrl(source)) {
@@ -53,9 +80,8 @@ export async function GET(request: Request) {
   try {
     const directDownloadUrl = await resolveYandexDiskDownloadUrl(source);
     if (directDownloadUrl) {
-      const response = NextResponse.redirect(directDownloadUrl, 307);
-      response.headers.set('Cache-Control', 'public, max-age=300, s-maxage=300');
-      return response;
+      const proxied = await proxyImageResponse(directDownloadUrl);
+      if (proxied) return proxied;
     }
 
     const upstream = await fetch(source, {
@@ -75,9 +101,12 @@ export async function GET(request: Request) {
       return NextResponse.json({ error: 'Preview image not found' }, { status: 404 });
     }
 
-    const response = NextResponse.redirect(resolved, 307);
-    response.headers.set('Cache-Control', 'public, max-age=300, s-maxage=300');
-    return response;
+    const proxied = await proxyImageResponse(resolved);
+    if (!proxied) {
+      return NextResponse.json({ error: 'Resolved image could not be loaded' }, { status: 502 });
+    }
+
+    return proxied;
   } catch (error) {
     console.error('[api/materials/external-image]', error instanceof Error ? error.message : String(error));
     return NextResponse.json({ error: 'Failed to resolve external image' }, { status: 500 });
