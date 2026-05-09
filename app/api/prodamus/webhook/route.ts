@@ -3,6 +3,10 @@ import { query, withTransaction } from '@/src/server/db';
 import { getProdamusConfig, verifyProdamusSignature } from '@/src/server/prodamus';
 import { markReferralClaimPaid } from '@/src/server/referrals';
 import { activateSubscriptionFromPayment } from '@/src/server/subscriptions';
+import {
+  sendStoreOrderPaidEmail,
+  sendSubscriptionActivatedEmail,
+} from '@/src/server/transactionalEmails';
 
 export const dynamic = 'force-dynamic';
 
@@ -123,6 +127,15 @@ export async function POST(request: Request) {
 
     const providerPaymentId = extractProviderPaymentId(payload);
     const successful = isPaymentSuccessful(payload);
+    let storeOrderEmailOrderId: string | null = null;
+    let subscriptionEmail:
+      | {
+          userId: string;
+          planId: string;
+          currentPeriodEnd: string;
+          wasExtended: boolean;
+        }
+      | null = null;
 
     await withTransaction(async (client) => {
       await client.query(
@@ -178,7 +191,7 @@ export async function POST(request: Request) {
             ? payment.raw_payload.months
             : Number(payment.raw_payload?.months ?? 1);
 
-        await activateSubscriptionFromPayment({
+        const activation = await activateSubscriptionFromPayment({
           client,
           userId: order.user_id,
           planId,
@@ -190,6 +203,13 @@ export async function POST(request: Request) {
             webhook: payload,
           },
         });
+
+        subscriptionEmail = {
+          userId: order.user_id,
+          planId,
+          currentPeriodEnd: activation.currentPeriodEnd,
+          wasExtended: activation.wasExtended,
+        };
       } else {
         await client.query(
           `
@@ -202,6 +222,8 @@ export async function POST(request: Request) {
           `,
           [orderId]
         );
+
+        storeOrderEmailOrderId = orderId;
       }
 
       if (order.coupon_code && Number(order.referral_discount ?? 0) > 0) {
@@ -226,6 +248,24 @@ export async function POST(request: Request) {
         );
       }
     });
+
+    if (storeOrderEmailOrderId) {
+      await sendStoreOrderPaidEmail(storeOrderEmailOrderId).catch((error) => {
+        console.error(
+          '[api/prodamus/webhook] store order email failed',
+          error instanceof Error ? error.message : String(error)
+        );
+      });
+    }
+
+    if (subscriptionEmail) {
+      await sendSubscriptionActivatedEmail(subscriptionEmail).catch((error) => {
+        console.error(
+          '[api/prodamus/webhook] subscription email failed',
+          error instanceof Error ? error.message : String(error)
+        );
+      });
+    }
 
     return NextResponse.json({ ok: true });
   } catch (error) {

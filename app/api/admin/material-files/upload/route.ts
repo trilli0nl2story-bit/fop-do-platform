@@ -9,6 +9,7 @@ import {
   registerMaterialFile,
   uploadMaterialFile,
 } from '@/src/server/storage';
+import { isAllowedMaterialUpload } from '@/src/server/materialMedia';
 import {
   consumeRequestRateLimit,
   rateLimitResponse,
@@ -86,6 +87,16 @@ export async function POST(request: Request) {
     }
     if (file.size > MAX_UPLOAD_BYTES) {
       return NextResponse.json({ error: 'file is too large' }, { status: 413 });
+    }
+
+    const uploadPolicy = isAllowedMaterialUpload({
+      fileRole,
+      fileName: file.name,
+      contentType: file.type || 'application/octet-stream',
+      fileSize: file.size,
+    });
+    if (!uploadPolicy.ok) {
+      return NextResponse.json({ error: 'invalid_file', message: uploadPolicy.message }, { status: 400 });
     }
 
     const matResult = await query<{ id: string; slug: string }>(

@@ -3,6 +3,7 @@
 import Link from 'next/link';
 import { useMemo, useState } from 'react';
 import { HelpCircle, Loader2, MessageSquareMore, ShieldCheck, Sparkles } from 'lucide-react';
+import { PublicFormConsent } from '../../src/components/PublicFormConsent';
 import { useAuthSession } from '../../src/hooks/useAuthSession';
 
 type QuestionFormState = {
@@ -105,6 +106,7 @@ export function MolodoySpecialistClient() {
           question: form.question,
           vkLink: form.vkLink,
           telegramLink: form.telegramLink,
+          consent: form.consent,
         }),
       });
 
@@ -319,27 +321,11 @@ export function MolodoySpecialistClient() {
                   />
                 </label>
               </div>
-
-              <label className="flex items-start gap-3 rounded-xl border border-gray-200 px-4 py-3 text-sm text-gray-600">
-                <input
-                  type="checkbox"
-                  checked={form.consent}
-                  onChange={(event) => updateField('consent', event.target.checked)}
-                  className="mt-0.5 h-4 w-4 rounded border-gray-300 text-teal-500 focus:ring-teal-400"
-                />
-                <span>
-                  Я согласен на обработку персональных данных и понимаю, что вопрос будет сохранён в
-                  системе. При необходимости можно сослаться на{' '}
-                  <Link href="/legal/soglasie" className="font-medium text-teal-600 underline underline-offset-2">
-                    согласие
-                  </Link>{' '}
-                  и{' '}
-                  <Link href="/legal/konfidentsialnost" className="font-medium text-teal-600 underline underline-offset-2">
-                    политику конфиденциальности
-                  </Link>
-                  .
-                </span>
-              </label>
+              <PublicFormConsent
+                checked={form.consent}
+                onChange={(checked) => updateField('consent', checked)}
+                accentClassName="text-teal-600"
+              />
 
               {success && (
                 <div className="rounded-xl border border-green-200 bg-green-50 px-4 py-3 text-sm text-green-800">

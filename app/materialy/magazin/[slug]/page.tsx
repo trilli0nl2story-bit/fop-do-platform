@@ -1,7 +1,9 @@
 import type { Metadata } from 'next';
-import { storeProducts } from '../../../../src/data/storeProducts';
 import { siteName, siteUrl } from '../../../../src/lib/siteConfig';
-import { getPublishedStoreMaterialBySlug } from '../../../../src/server/publicStore';
+import {
+  getPublishedStoreMaterialBySlug,
+  getPublishedStoreMaterials,
+} from '../../../../src/server/publicStore';
 import { dbMaterialToStoreProduct } from '../../../../src/lib/dbStoreProducts';
 import { ProductDetailClient } from './client';
 
@@ -10,27 +12,20 @@ interface PageProps {
 }
 
 export async function generateStaticParams(): Promise<{ slug: string }[]> {
-  return storeProducts.map((p) => ({ slug: p.slug }));
+  const materials = await getPublishedStoreMaterials(500).catch(() => []);
+  return materials.map((material) => ({ slug: material.slug }));
 }
 
 export async function generateMetadata({ params }: PageProps): Promise<Metadata> {
   const { slug } = await params;
-  const localProduct = storeProducts.find((p) => p.slug === slug);
-  const dbProduct = localProduct ? null : await getPublishedStoreMaterialBySlug(slug).catch(() => null);
-
-  const product = localProduct
+  const material = await getPublishedStoreMaterialBySlug(slug).catch(() => null);
+  const product = material
     ? {
-        title: localProduct.seoTitle || localProduct.title,
-        description: localProduct.seoDescription || localProduct.shortDescription,
-        coverUrl: localProduct.coverUrl,
+        title: material.seoTitle || material.title,
+        description: material.seoDescription || material.shortDescription,
+        coverUrl: material.coverUrl,
       }
-    : dbProduct
-      ? {
-          title: dbProduct.seoTitle || dbProduct.title,
-          description: dbProduct.seoDescription || dbProduct.shortDescription,
-          coverUrl: dbProduct.coverUrl,
-        }
-      : null;
+    : null;
 
   if (!product) {
     return { title: `Материал не найден | ${siteName}` };
@@ -60,11 +55,9 @@ export async function generateMetadata({ params }: PageProps): Promise<Metadata>
 
 export default async function ProductDetailPage({ params }: PageProps) {
   const { slug } = await params;
-  const localProduct = storeProducts.find((p) => p.slug === slug) ?? null;
-  const initialProduct = localProduct
-    ?? await getPublishedStoreMaterialBySlug(slug)
-      .then((material) => (material ? dbMaterialToStoreProduct(material) : null))
-      .catch(() => null);
+  const initialProduct = await getPublishedStoreMaterialBySlug(slug)
+    .then((material) => (material ? dbMaterialToStoreProduct(material) : null))
+    .catch(() => null);
 
   const productSchema = initialProduct
     ? {

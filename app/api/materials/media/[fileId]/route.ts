@@ -2,6 +2,7 @@ import { NextResponse } from 'next/server';
 import { getCurrentUser } from '@/src/server/auth';
 import { query } from '@/src/server/db';
 import { getMaterialFileBlob } from '@/src/server/storage';
+import { getSafeMediaHeaders } from '@/src/server/materialMedia';
 
 export const dynamic = 'force-dynamic';
 export const runtime = 'nodejs';
@@ -53,15 +54,14 @@ export async function GET(_request: Request, { params }: Params) {
 
     return new Response(blob.data, {
       status: 200,
-      headers: {
-        'Content-Type': blob.contentType || 'application/octet-stream',
-        'Content-Disposition': `inline; filename="${encodeURIComponent(blob.fileName)}"`,
-        'Cache-Control': file.is_published ? 'public, max-age=3600' : 'private, no-store',
-      },
+      headers: getSafeMediaHeaders({
+        contentType: blob.contentType || 'application/octet-stream',
+        fileName: blob.fileName,
+        isPublished: file.is_published,
+      }),
     });
   } catch (err) {
     console.error('[api/materials/media/:fileId]', err instanceof Error ? err.message : String(err));
     return NextResponse.json({ error: 'Internal server error' }, { status: 500 });
   }
 }
-

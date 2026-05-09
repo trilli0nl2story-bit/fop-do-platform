@@ -1,5 +1,6 @@
 import { NextResponse } from 'next/server';
 import { getCurrentUser } from '@/src/server/auth';
+import { query } from '@/src/server/db';
 import {
   consumeRequestRateLimit,
   rateLimitResponse,
@@ -49,11 +50,44 @@ export async function PATCH(
       return NextResponse.json({ error: 'invalid_action' }, { status: 400 });
     }
 
+    const beforeResult = await query<{
+      id: string;
+      user_id: string;
+      status: string;
+      plan_code: string | null;
+      current_period_start: string | null;
+      current_period_end: string | null;
+      updated_at: string;
+    }>(
+      `
+        SELECT id, user_id, status, plan_code, current_period_start, current_period_end, updated_at
+        FROM subscriptions
+        WHERE id = $1
+        LIMIT 1
+      `,
+      [subscriptionId]
+    );
+    const before = beforeResult.rows[0];
+    if (!before) {
+      return NextResponse.json({ error: 'subscription_not_found' }, { status: 404 });
+    }
+
     const updated = await updateSubscriptionByAdmin({
       subscriptionId,
       action: action as 'pause' | 'resume' | 'cancel' | 'expire' | 'extend',
       months,
     });
+
+    await query(
+      `INSERT INTO admin_audit_log (admin_id, action, target_type, target_id, before_data, after_data)
+       VALUES ($1, 'subscription.update', 'subscription', $2, $3::jsonb, $4::jsonb)`,
+      [
+        user.id,
+        subscriptionId,
+        JSON.stringify(before),
+        JSON.stringify(updated),
+      ]
+    );
 
     return NextResponse.json({ ok: true, subscription: updated });
   } catch (error) {

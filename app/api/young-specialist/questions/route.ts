@@ -1,4 +1,4 @@
-import { randomInt } from 'node:crypto';
+﻿import { randomInt } from 'node:crypto';
 import { NextResponse } from 'next/server';
 import { getCurrentUser } from '@/src/server/auth';
 import { query } from '@/src/server/db';
@@ -7,6 +7,7 @@ import {
   rateLimitResponse,
   requireTrustedOrigin,
 } from '@/src/server/security';
+import { buildConsentMeta, ensureConsentColumns } from '@/src/server/publicFormConsent';
 
 export const dynamic = 'force-dynamic';
 
@@ -22,6 +23,7 @@ type CreateYoungSpecialistBody = {
   question?: string;
   vkLink?: string;
   telegramLink?: string;
+  consent?: boolean;
 };
 
 function normalizeText(value: unknown, maxLength: number): string {
@@ -88,7 +90,7 @@ export async function POST(request: Request) {
     body = (await request.json()) as CreateYoungSpecialistBody;
   } catch {
     return NextResponse.json(
-      { error: 'invalid_json', message: 'Не удалось прочитать вопрос. Обновите страницу и попробуйте ещё раз.' },
+      { error: 'invalid_json', message: 'РќРµ СѓРґР°Р»РѕСЃСЊ РїСЂРѕС‡РёС‚Р°С‚СЊ РІРѕРїСЂРѕСЃ. РћР±РЅРѕРІРёС‚Рµ СЃС‚СЂР°РЅРёС†Сѓ Рё РїРѕРїСЂРѕР±СѓР№С‚Рµ РµС‰С‘ СЂР°Р·.' },
       { status: 400 }
     );
   }
@@ -104,59 +106,69 @@ export async function POST(request: Request) {
   const question = normalizeText(body.question, 5000);
   const vkLink = normalizeOptionalUrl(body.vkLink, 1000);
   const telegramLink = normalizeOptionalUrl(body.telegramLink, 1000);
+  const consentAccepted = body.consent === true;
 
   if (!name) {
     return NextResponse.json(
-      { error: 'missing_name', message: 'Укажите имя.' },
+      { error: 'missing_name', message: 'РЈРєР°Р¶РёС‚Рµ РёРјСЏ.' },
       { status: 400 }
     );
   }
 
   if (!email || !isValidEmail(email)) {
     return NextResponse.json(
-      { error: 'invalid_email', message: 'Укажите корректный email.' },
+      { error: 'invalid_email', message: 'РЈРєР°Р¶РёС‚Рµ РєРѕСЂСЂРµРєС‚РЅС‹Р№ email.' },
       { status: 400 }
     );
   }
 
   if (!position) {
     return NextResponse.json(
-      { error: 'missing_position', message: 'Укажите должность.' },
+      { error: 'missing_position', message: 'РЈРєР°Р¶РёС‚Рµ РґРѕР»Р¶РЅРѕСЃС‚СЊ.' },
       { status: 400 }
     );
   }
 
   if (!topic) {
     return NextResponse.json(
-      { error: 'missing_topic', message: 'Укажите тему вопроса.' },
+      { error: 'missing_topic', message: 'РЈРєР°Р¶РёС‚Рµ С‚РµРјСѓ РІРѕРїСЂРѕСЃР°.' },
       { status: 400 }
     );
   }
 
   if (!question) {
     return NextResponse.json(
-      { error: 'missing_question', message: 'Опишите ваш вопрос.' },
+      { error: 'missing_question', message: 'РћРїРёС€РёС‚Рµ РІР°С€ РІРѕРїСЂРѕСЃ.' },
+      { status: 400 }
+    );
+  }
+
+  
+
+  if (!consentAccepted) {
+    return NextResponse.json(
+      { error: 'missing_consent', message: 'Нужно подтвердить согласие на обработку персональных данных.' },
       { status: 400 }
     );
   }
 
   if (body.age !== undefined && body.age !== null && body.age !== '' && age === null) {
     return NextResponse.json(
-      { error: 'invalid_age', message: 'Возраст укажите числом от 18 до 90.' },
+      { error: 'invalid_age', message: 'Р’РѕР·СЂР°СЃС‚ СѓРєР°Р¶РёС‚Рµ С‡РёСЃР»РѕРј РѕС‚ 18 РґРѕ 90.' },
       { status: 400 }
     );
   }
 
   if (vkLink === null) {
     return NextResponse.json(
-      { error: 'invalid_vk_link', message: 'Ссылка VK должна начинаться с http:// или https://.' },
+      { error: 'invalid_vk_link', message: 'РЎСЃС‹Р»РєР° VK РґРѕР»Р¶РЅР° РЅР°С‡РёРЅР°С‚СЊСЃСЏ СЃ http:// РёР»Рё https://.' },
       { status: 400 }
     );
   }
 
   if (telegramLink === null) {
     return NextResponse.json(
-      { error: 'invalid_telegram_link', message: 'Ссылка Telegram должна начинаться с http:// или https://.' },
+      { error: 'invalid_telegram_link', message: 'РЎСЃС‹Р»РєР° Telegram РґРѕР»Р¶РЅР° РЅР°С‡РёРЅР°С‚СЊСЃСЏ СЃ http:// РёР»Рё https://.' },
       { status: 400 }
     );
   }
@@ -170,12 +182,14 @@ export async function POST(request: Request) {
   if (!rateLimit.allowed) {
     return rateLimitResponse(
       rateLimit,
-      'Слишком много вопросов за короткое время. Подождите немного и попробуйте снова.'
+      'РЎР»РёС€РєРѕРј РјРЅРѕРіРѕ РІРѕРїСЂРѕСЃРѕРІ Р·Р° РєРѕСЂРѕС‚РєРѕРµ РІСЂРµРјСЏ. РџРѕРґРѕР¶РґРёС‚Рµ РЅРµРјРЅРѕРіРѕ Рё РїРѕРїСЂРѕР±СѓР№С‚Рµ СЃРЅРѕРІР°.'
     );
   }
 
   try {
+    await ensureConsentColumns('young_specialist_questions');
     const ticketId = await createUniqueTicketId();
+    const consentMeta = buildConsentMeta(request);
 
     const result = await query<{ id: string; ticket_id: string; status: string; created_at: string }>(
       `
@@ -193,11 +207,14 @@ export async function POST(request: Request) {
           question,
           vk_link,
           telegram_link,
+          consent_accepted_at,
+          consent_ip,
+          consent_user_agent,
           status,
           created_at,
           updated_at
         )
-        VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, 'new', now(), now())
+        VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, 'new', now(), now())
         RETURNING id, ticket_id, status, created_at
       `,
       [
@@ -214,6 +231,9 @@ export async function POST(request: Request) {
         question,
         vkLink || null,
         telegramLink || null,
+        consentMeta.acceptedAt,
+        consentMeta.ip,
+        consentMeta.userAgent,
       ]
     );
 
@@ -230,13 +250,14 @@ export async function POST(request: Request) {
         status: row.status,
         createdAt: new Date(row.created_at).toISOString(),
       },
-      message: 'Вопрос принят. Мы передадим его эксперту и сохраним номер обращения.',
+      message: 'Р’РѕРїСЂРѕСЃ РїСЂРёРЅСЏС‚. РњС‹ РїРµСЂРµРґР°РґРёРј РµРіРѕ СЌРєСЃРїРµСЂС‚Сѓ Рё СЃРѕС…СЂР°РЅРёРј РЅРѕРјРµСЂ РѕР±СЂР°С‰РµРЅРёСЏ.',
     });
   } catch (error) {
     console.error('[api/young-specialist/questions]', error instanceof Error ? error.message : String(error));
     return NextResponse.json(
-      { error: 'internal_error', message: 'Не удалось отправить вопрос. Попробуйте ещё раз.' },
+      { error: 'internal_error', message: 'РќРµ СѓРґР°Р»РѕСЃСЊ РѕС‚РїСЂР°РІРёС‚СЊ РІРѕРїСЂРѕСЃ. РџРѕРїСЂРѕР±СѓР№С‚Рµ РµС‰С‘ СЂР°Р·.' },
       { status: 500 }
     );
   }
 }
+

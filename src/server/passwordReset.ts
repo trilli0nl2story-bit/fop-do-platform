@@ -1,4 +1,5 @@
 import { createHash, randomBytes } from 'node:crypto';
+import { getAppOrigin } from './appOrigin';
 import { bumpUserSessionVersion, hashPassword } from './auth';
 import { query } from './db';
 import { sendEmail } from './email';
@@ -9,23 +10,6 @@ let tableReady: Promise<void> | null = null;
 
 function hashToken(token: string): string {
   return createHash('sha256').update(token).digest('hex');
-}
-
-function getAppOrigin(requestOrigin?: string): string {
-  const configured =
-    process.env.APP_ORIGIN ||
-    process.env.NEXT_PUBLIC_SITE_URL ||
-    process.env.SITE_URL;
-
-  if (configured) {
-    return configured.replace(/\/+$/, '');
-  }
-
-  if (requestOrigin) {
-    return requestOrigin.replace(/\/+$/, '');
-  }
-
-  return 'http://localhost:5000';
 }
 
 async function ensureTable(): Promise<void> {

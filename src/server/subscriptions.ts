@@ -1,4 +1,5 @@
 import type { PoolClient } from 'pg';
+import { getAppOrigin } from './appOrigin';
 import { query, withTransaction } from './db';
 import { buildProdamusPayformUrl, isProdamusConfigured } from './prodamus';
 import {
@@ -49,6 +50,18 @@ type AdminSubscriptionRow = {
   updated_at: string;
 };
 
+type PendingSubscriptionRow = {
+  order_id: string;
+  order_total_amount: number | string;
+  payment_id: string;
+  payment_amount: number | string;
+  payment_raw_payload: {
+    kind?: string;
+    planCode?: string;
+    payformUrl?: string;
+  } | null;
+};
+
 export interface SubscriptionCheckoutResult {
   orderId: string;
   paymentId: string;
@@ -68,12 +81,67 @@ export interface AdminSubscriptionUpdateResult {
   updatedAt: string;
 }
 
+export interface ActivatedSubscriptionResult {
+  currentPeriodEnd: string;
+  wasExtended: boolean;
+}
+
 function rublesToKopecks(value: number): number {
   return Math.round(value * 100);
 }
 
-function buildRedirectOrigin(requestOrigin: string): string {
-  return requestOrigin.replace(/\/+$/, '');
+async function lockSubscriptionScope(client: PoolClient, scope: string): Promise<void> {
+  await client.query('SELECT pg_advisory_xact_lock(hashtext($1))', [scope]);
+}
+
+async function findReusablePendingSubscription(params: {
+  client: PoolClient;
+  userId: string;
+  planId: string;
+  totalRubles: number;
+}): Promise<{ orderId: string; paymentId: string; paymentUrl: string | null; totalRubles: number } | null> {
+  const result = await params.client.query<PendingSubscriptionRow>(
+    `
+      SELECT
+        o.id AS order_id,
+        o.total_amount AS order_total_amount,
+        p.id AS payment_id,
+        p.amount AS payment_amount,
+        p.raw_payload AS payment_raw_payload
+      FROM orders o
+      JOIN payments p ON p.order_id = o.id
+      WHERE o.user_id = $1
+        AND o.status = 'pending'
+        AND p.status = 'pending'
+        AND p.provider = 'prodamus'
+      ORDER BY GREATEST(o.created_at, p.created_at) DESC
+      LIMIT 10
+    `,
+    [params.userId]
+  );
+
+  for (const row of result.rows) {
+    const sameKind = row.payment_raw_payload?.kind === 'subscription';
+    const samePlan = row.payment_raw_payload?.planCode === params.planId;
+    const sameTotal = Number(row.payment_amount ?? 0) === rublesToKopecks(params.totalRubles);
+    if (!sameKind || !samePlan || !sameTotal) {
+      continue;
+    }
+
+    const paymentUrl =
+      typeof row.payment_raw_payload?.payformUrl === 'string' && row.payment_raw_payload.payformUrl.trim()
+        ? row.payment_raw_payload.payformUrl.trim()
+        : null;
+
+    return {
+      orderId: row.order_id,
+      paymentId: row.payment_id,
+      paymentUrl,
+      totalRubles: Math.round(Number(row.order_total_amount ?? 0) / 100),
+    };
+  }
+
+  return null;
 }
 
 export function getEffectiveSubscriptionStatus(
@@ -125,7 +193,7 @@ function buildSubscriptionPaymentUrl(params: {
   customerPhone: string;
   requestOrigin: string;
 }): string {
-  const origin = buildRedirectOrigin(params.requestOrigin);
+  const origin = getAppOrigin(params.requestOrigin);
   const totalRubles = getSubscriptionPlanTotalRubles(params.plan);
 
   return buildProdamusPayformUrl({
@@ -235,34 +303,56 @@ export async function createSubscriptionCheckout(params: {
   }
 
   const user = await getUserCheckoutInfo(params.userId);
-  const { order, payment } = await withTransaction((client) =>
-    createSubscriptionRows(client, params.userId, plan)
-  );
+  const totalRubles = getSubscriptionPlanTotalRubles(plan);
+  const { order, payment, reused } = await withTransaction(async (client) => {
+    await lockSubscriptionScope(client, `subscription-checkout:${params.userId}`);
 
-  const paymentUrl = buildSubscriptionPaymentUrl({
-    orderId: order.id,
-    paymentId: payment.id,
-    plan,
-    customerEmail: user.email,
-    customerPhone: user.phone,
-    requestOrigin: params.requestOrigin,
+    const reusable = await findReusablePendingSubscription({
+      client,
+      userId: params.userId,
+      planId: plan.id,
+      totalRubles,
+    });
+
+    if (reusable) {
+      return {
+        order: { id: reusable.orderId, total_amount: rublesToKopecks(reusable.totalRubles) } as CreatedOrderRow,
+        payment: { id: reusable.paymentId } as CreatedPaymentRow,
+        reused: reusable,
+      };
+    }
+
+    const created = await createSubscriptionRows(client, params.userId, plan);
+    return { ...created, reused: null };
   });
 
-  await query(
-    `
-      UPDATE payments
-      SET raw_payload = COALESCE(raw_payload, '{}'::jsonb)
-        || jsonb_build_object('payformUrl', $2::text)
-      WHERE id = $1
-    `,
-    [payment.id, paymentUrl]
-  );
+  let paymentUrl = reused?.paymentUrl ?? null;
+  if (!paymentUrl) {
+    paymentUrl = buildSubscriptionPaymentUrl({
+      orderId: order.id,
+      paymentId: payment.id,
+      plan,
+      customerEmail: user.email,
+      customerPhone: user.phone,
+      requestOrigin: params.requestOrigin,
+    });
+
+    await query(
+      `
+        UPDATE payments
+        SET raw_payload = COALESCE(raw_payload, '{}'::jsonb)
+          || jsonb_build_object('payformUrl', $2::text)
+        WHERE id = $1
+      `,
+      [payment.id, paymentUrl]
+    );
+  }
 
   return {
     orderId: order.id,
     paymentId: payment.id,
     paymentUrl,
-    totalRubles: getSubscriptionPlanTotalRubles(plan),
+    totalRubles,
     planId: plan.id,
   };
 }
@@ -273,7 +363,7 @@ export async function activateSubscriptionFromPayment(params: {
   planId: string;
   months: number;
   rawPayload: Record<string, unknown>;
-}): Promise<void> {
+}): Promise<ActivatedSubscriptionResult> {
   const activeResult = await params.client.query<ActiveSubscriptionRow>(
     `
       SELECT id, current_period_end
@@ -289,7 +379,7 @@ export async function activateSubscriptionFromPayment(params: {
 
   const active = activeResult.rows[0];
   if (active) {
-    await params.client.query(
+    const updateResult = await params.client.query<{ current_period_end: string }>(
       `
         UPDATE subscriptions
         SET current_period_end = current_period_end + make_interval(months => $2),
@@ -298,13 +388,18 @@ export async function activateSubscriptionFromPayment(params: {
             updated_at = now(),
             raw_payload = COALESCE(raw_payload, '{}'::jsonb) || $4::jsonb
         WHERE id = $1
+        RETURNING current_period_end
       `,
       [active.id, params.months, params.planId, JSON.stringify(params.rawPayload)]
     );
-    return;
+
+    return {
+      currentPeriodEnd: new Date(updateResult.rows[0].current_period_end).toISOString(),
+      wasExtended: true,
+    };
   }
 
-  await params.client.query(
+  const insertResult = await params.client.query<{ current_period_end: string }>(
     `
       INSERT INTO subscriptions (
         user_id,
@@ -332,9 +427,15 @@ export async function activateSubscriptionFromPayment(params: {
         now(),
         now()
       )
+      RETURNING current_period_end
     `,
     [params.userId, params.planId, params.months, JSON.stringify(params.rawPayload)]
   );
+
+  return {
+    currentPeriodEnd: new Date(insertResult.rows[0].current_period_end).toISOString(),
+    wasExtended: false,
+  };
 }
 
 export async function updateSubscriptionByAdmin(params: {

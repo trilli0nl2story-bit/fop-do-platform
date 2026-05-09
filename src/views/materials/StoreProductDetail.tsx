@@ -5,8 +5,7 @@ import {
   GraduationCap, ListChecks, Wrench, Plus, CalendarDays, PackageCheck, Star, Zap,
 } from 'lucide-react';
 import { Button } from '../../components/Button';
-import { getRelatedProducts, RelatedProduct, StoreProduct } from '../../data/storeProducts';
-import { getMergedProductBySlug } from '../../lib/cmsProducts';
+import { StoreProduct } from '../../data/storeProducts';
 import { dbMaterialToStoreProduct } from '../../lib/dbStoreProducts';
 import { useCart } from '../../context/CartContext';
 import { InlineActivityHint } from '../../components/InlineActivityHint';
@@ -149,19 +148,17 @@ export function StoreProductDetail({
 }: StoreProductDetailProps) {
   const [showPreview, setShowPreview] = useState(false);
   const [addedItems, setAddedItems] = useState<Set<number>>(new Set());
-  const [subscriptionActivated, setSubscriptionActivated] = useState(false);
   const [detailsOpen, setDetailsOpen] = useState(false);
   const [dbProduct, setDbProduct] = useState<StoreProduct | null>(initialProduct);
   const [dbProductLoading, setDbProductLoading] = useState(false);
   const [downloadCount] = useState(() => randomDownloadCount());
 
-  const localProduct = getMergedProductBySlug(slug);
-  const product = localProduct ?? dbProduct;
+  const product = dbProduct;
   const { addItem, items } = useCart();
-  const relatedProducts: RelatedProduct[] = product ? getRelatedProducts(product) : [];
+  const relatedProducts: Array<{ type: 'next_month' | 'previous_month' | 'same_age_related'; product: StoreProduct }> = [];
 
   useEffect(() => {
-    if (localProduct || initialProduct) return;
+    if (initialProduct) return;
     let cancelled = false;
     setDbProductLoading(true);
 
@@ -181,9 +178,9 @@ export function StoreProductDetail({
     return () => {
       cancelled = true;
     };
-  }, [initialProduct, localProduct, slug]);
+  }, [initialProduct, slug]);
 
-  const handleAddUpsell = (rp: RelatedProduct['product']) => {
+  const handleAddUpsell = (rp: StoreProduct) => {
     addItem({
       id: rp.id,
       slug: rp.slug,
@@ -372,53 +369,43 @@ export function StoreProductDetail({
               </div>
 
               {/* Subscription block */}
-              {!subscriptionActivated ? (
+              {
                 <div className="bg-amber-50 border border-amber-200 rounded-xl p-3 space-y-2">
                   <div className="flex items-start gap-2.5">
                     <div className="w-7 h-7 bg-amber-100 rounded-lg flex items-center justify-center flex-shrink-0 mt-0.5">
                       <Star className="w-3.5 h-3.5 text-amber-600" />
                     </div>
                     <div className="flex-1 min-w-0">
-                      <p className="text-sm font-bold text-gray-900 leading-snug">Больше материалов по подписке</p>
-                      <p className="text-xs text-gray-600 mt-0.5">Библиотека + помощник + скидка 25% на покупки в магазине</p>
+                      <p className="text-sm font-bold text-gray-900 leading-snug">???????????? ???????????????????? ???? ????????????????</p>
+                      <p className="text-xs text-gray-600 mt-0.5">???????????????????? + ???????????????? + ???????????? 25% ???? ?????????????? ?? ????????????????</p>
                     </div>
                   </div>
                   <div className="bg-amber-100 rounded-lg px-2.5 py-2 space-y-1">
                     <div className="flex items-center justify-between text-xs">
-                      <span className="text-gray-600">1 документ сейчас:</span>
-                      <span className="font-medium text-gray-700">{product.price.toLocaleString('ru-RU')} ₽</span>
+                      <span className="text-gray-600">1 ???????????????? ????????????:</span>
+                      <span className="font-medium text-gray-700">{product.price.toLocaleString('ru-RU')} ???</span>
                     </div>
                     <div className="flex items-center justify-between text-xs">
-                      <span className="text-gray-600">С подпиской:</span>
-                      <span className="font-semibold text-amber-900">{discountedPrice.toLocaleString('ru-RU')} ₽ за документ</span>
+                      <span className="text-gray-600">?? ??????????????????:</span>
+                      <span className="font-semibold text-amber-900">{discountedPrice.toLocaleString('ru-RU')} ??? ???? ????????????????</span>
                     </div>
                     <div className="flex items-center justify-between text-xs border-t border-amber-200 pt-1 mt-0.5">
-                      <span className="text-green-700 font-medium">Экономия:</span>
-                      <span className="font-bold text-green-700">{saving.toLocaleString('ru-RU')} ₽</span>
+                      <span className="text-green-700 font-medium">????????????????:</span>
+                      <span className="font-bold text-green-700">{saving.toLocaleString('ru-RU')} ???</span>
                     </div>
                   </div>
                   <div className="flex items-center justify-between text-xs text-gray-500 px-0.5">
-                    <span className="text-gray-500">Подписка:</span>
-                    <span className="font-bold text-amber-800">278 ₽/мес</span>
+                    <span className="text-gray-500">????????????????:</span>
+                    <span className="font-bold text-amber-800">278 ???/??????</span>
                   </div>
                   <button
-                    onClick={() => setSubscriptionActivated(true)}
+                    onClick={() => onNavigate('subscription')}
                     className="w-full flex items-center justify-center gap-1.5 text-sm font-semibold text-white bg-amber-500 hover:bg-amber-600 rounded-lg px-3 py-2 transition-colors"
                   >
-                    <Zap className="w-3.5 h-3.5" />Получить доступ за 278 ₽/мес
+                    <Zap className="w-3.5 h-3.5" />???????????????? ???????????????? ?????????? Prodamus
                   </button>
                 </div>
-              ) : (
-                <div className="bg-green-50 border border-green-200 rounded-xl p-3 flex items-center gap-3">
-                  <div className="w-7 h-7 bg-green-100 rounded-full flex items-center justify-center flex-shrink-0">
-                    <Check className="w-3.5 h-3.5 text-green-600" />
-                  </div>
-                  <div>
-                    <p className="text-sm font-semibold text-green-800">Подписка оформлена</p>
-                    <p className="text-xs text-green-600">Библиотека открыта + скидка 25% на магазин</p>
-                  </div>
-                </div>
-              )}
+              }
 
               {/* ── EXPANDABLE DETAILS SECTION ── */}
               <div className="border border-gray-200 rounded-xl overflow-hidden">
@@ -710,51 +697,43 @@ export function StoreProductDetail({
               </div>
 
               <div className="px-4 pb-4">
-                {subscriptionActivated ? (
-                  <div className="bg-green-50 border border-green-200 rounded-xl p-3.5 text-center">
-                    <div className="w-7 h-7 bg-green-100 rounded-full flex items-center justify-center mx-auto mb-1.5">
-                      <Check className="w-4 h-4 text-green-600" />
-                    </div>
-                    <p className="text-sm font-semibold text-green-800 leading-snug">Подписка оформлена</p>
-                    <p className="text-xs text-green-600 mt-0.5">Библиотека открыта + скидка 25% на магазин</p>
-                  </div>
-                ) : (
+                {
                   <div className="bg-amber-50 border border-amber-200 rounded-xl p-3.5 space-y-2.5">
                     <div className="flex items-start gap-2.5">
                       <div className="w-7 h-7 bg-amber-100 rounded-lg flex items-center justify-center flex-shrink-0 mt-0.5">
                         <Star className="w-3.5 h-3.5 text-amber-600" />
                       </div>
                       <div>
-                        <p className="text-sm font-bold text-gray-900 leading-snug">Больше материалов по подписке</p>
-                        <p className="text-xs text-gray-600 mt-0.5">Библиотека + помощник + скидка 25% на покупки в магазине</p>
+                        <p className="text-sm font-bold text-gray-900 leading-snug">???????????? ???????????????????? ???? ????????????????</p>
+                        <p className="text-xs text-gray-600 mt-0.5">???????????????????? + ???????????????? + ???????????? 25% ???? ?????????????? ?? ????????????????</p>
                       </div>
                     </div>
                     <div className="bg-amber-100 rounded-lg px-3 py-2 space-y-1">
                       <div className="flex items-center justify-between text-xs">
-                        <span className="text-gray-600">1 документ сейчас:</span>
-                        <span className="font-medium text-gray-700">{product.price.toLocaleString('ru-RU')} ₽</span>
+                        <span className="text-gray-600">1 ???????????????? ????????????:</span>
+                        <span className="font-medium text-gray-700">{product.price.toLocaleString('ru-RU')} ???</span>
                       </div>
                       <div className="flex items-center justify-between text-xs">
-                        <span className="text-gray-600">С подпиской:</span>
-                        <span className="font-semibold text-amber-900">{discountedPrice.toLocaleString('ru-RU')} ₽ за документ</span>
+                        <span className="text-gray-600">?? ??????????????????:</span>
+                        <span className="font-semibold text-amber-900">{discountedPrice.toLocaleString('ru-RU')} ??? ???? ????????????????</span>
                       </div>
                       <div className="flex items-center justify-between text-xs border-t border-amber-200 pt-1 mt-0.5">
-                        <span className="text-green-700 font-medium">Экономия:</span>
-                        <span className="font-bold text-green-700">{saving.toLocaleString('ru-RU')} ₽</span>
+                        <span className="text-green-700 font-medium">????????????????:</span>
+                        <span className="font-bold text-green-700">{saving.toLocaleString('ru-RU')} ???</span>
                       </div>
                       <div className="flex items-center justify-between text-xs border-t border-amber-200 pt-1 mt-0.5">
-                        <span className="text-gray-600">Подписка:</span>
-                        <span className="font-bold text-amber-900">278 ₽/мес</span>
+                        <span className="text-gray-600">????????????????:</span>
+                        <span className="font-bold text-amber-900">278 ???/??????</span>
                       </div>
                     </div>
                     <button
-                      onClick={() => setSubscriptionActivated(true)}
+                      onClick={() => onNavigate('subscription')}
                       className="w-full flex items-center justify-center gap-1.5 text-sm font-semibold text-white bg-amber-500 hover:bg-amber-600 active:bg-amber-700 rounded-xl py-2.5 px-3 transition-colors"
                     >
-                      <Zap className="w-3.5 h-3.5" />Получить доступ за 278 ₽/мес
+                      <Zap className="w-3.5 h-3.5" />???????????????? ???????????????? ?????????? Prodamus
                     </button>
                   </div>
-                )}
+                }
               </div>
 
               <div className="px-4 pb-4 space-y-1.5 border-t border-gray-100 pt-3">

@@ -3,7 +3,6 @@ import { Search, ShoppingBag, Eye, ShoppingCart, Check, FileText, Zap, Gift, Clo
 import { Input } from '../../components/Input';
 import { Button } from '../../components/Button';
 import { KTP_MONTHS, KTP_AGE_GROUPS, StoreProduct } from '../../data/storeProducts';
-import { getMergedStoreProducts } from '../../lib/cmsProducts';
 import { dbMaterialToStoreProduct } from '../../lib/dbStoreProducts';
 import { getVisibleCategories } from '../../lib/cmsCategories';
 import { useCart } from '../../context/CartContext';
@@ -306,12 +305,7 @@ export function StoreMaterials({
     };
   }, []);
 
-  const localProducts = getMergedStoreProducts();
-  const localSlugs = new Set(localProducts.map(product => product.slug));
-  const allProducts = [
-    ...dbProducts.filter(product => !localSlugs.has(product.slug)),
-    ...localProducts,
-  ];
+  const allProducts = dbProducts;
   const categoryNames = new Set([
     ...getVisibleCategories().map(c => c.name),
     ...dbProducts.map(product => product.category).filter(Boolean),

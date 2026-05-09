@@ -125,6 +125,29 @@ export async function GET() {
       [userId]
     );
 
+    const authorCountRes = await query<{ count: string }>(
+      'SELECT COUNT(*) AS count FROM author_applications WHERE user_id = $1',
+      [userId]
+    );
+    const authorTotal = parseInt(authorCountRes.rows[0]?.count ?? '0', 10);
+
+    const authorItemsRes = await query<{
+      id: string;
+      status: string;
+      employment_type: string;
+      document_url: string | null;
+      created_at: string;
+    }>(
+      `
+        SELECT id, status, employment_type, document_url, created_at
+        FROM author_applications
+        WHERE user_id = $1
+        ORDER BY created_at DESC
+        LIMIT 5
+      `,
+      [userId]
+    );
+
     const orderStatsRes = await query<{
       count: string;
       paid_total_kopecks: string | null;
@@ -199,6 +222,16 @@ export async function GET() {
           description: r.description,
           status: r.status,
           createdAt: new Date(r.created_at).toISOString(),
+        })),
+      },
+      authorApplications: {
+        total: authorTotal,
+        items: authorItemsRes.rows.map((row) => ({
+          id: row.id,
+          status: row.status,
+          employmentType: row.employment_type,
+          sampleUrl: row.document_url ?? '',
+          createdAt: new Date(row.created_at).toISOString(),
         })),
       },
       orders: {

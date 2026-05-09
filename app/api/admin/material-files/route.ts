@@ -165,8 +165,25 @@ export async function POST(request: Request) {
       storageKey: storageKey.trim(),
       fileSize: typeof fileSize === 'number' ? fileSize : null,
     });
+    let materialUpdate: { coverUrl?: string; previewFileUrl?: string } = {};
+    if (fileRole === 'cover' || fileRole === 'preview') {
+      const mediaUrl = `/api/materials/media/${created.id}`;
+      if (fileRole === 'cover') {
+        await query(
+          `UPDATE materials SET cover_url = $2, updated_at = now() WHERE id = $1`,
+          [matResult.rows[0].id, mediaUrl]
+        );
+        materialUpdate = { coverUrl: mediaUrl };
+      } else {
+        await query(
+          `UPDATE materials SET preview_file_url = $2, updated_at = now() WHERE id = $1`,
+          [matResult.rows[0].id, mediaUrl]
+        );
+        materialUpdate = { previewFileUrl: mediaUrl };
+      }
+    }
 
-    return NextResponse.json({ ok: true, file: created }, { status: 201 });
+    return NextResponse.json({ ok: true, file: created, materialUpdate }, { status: 201 });
   } catch (err) {
     console.error('[api/admin/material-files POST]', err instanceof Error ? err.message : String(err));
     return NextResponse.json({ error: 'Internal server error' }, { status: 500 });

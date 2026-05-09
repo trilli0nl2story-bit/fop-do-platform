@@ -3,6 +3,7 @@
 import Link from 'next/link';
 import { useMemo, useState } from 'react';
 import { FileText, Lightbulb, Loader2, Package, ShieldCheck } from 'lucide-react';
+import { PublicFormConsent } from '../../src/components/PublicFormConsent';
 import { useAuthSession } from '../../src/hooks/useAuthSession';
 
 type RequestState = {
@@ -12,6 +13,7 @@ type RequestState = {
   ageGroup: string;
   documentType: string;
   description: string;
+  consent: boolean;
 };
 
 const AGE_GROUP_OPTIONS = [
@@ -50,6 +52,7 @@ export function ZakazatDokumentClient() {
     ageGroup: '',
     documentType: '',
     description: '',
+    consent: false,
   });
   const [submitting, setSubmitting] = useState(false);
   const [successMessage, setSuccessMessage] = useState('');
@@ -84,6 +87,7 @@ export function ZakazatDokumentClient() {
           ageGroup: form.ageGroup,
           documentType: form.documentType,
           description: form.description,
+          consent: form.consent,
         }),
       });
 
@@ -105,6 +109,7 @@ export function ZakazatDokumentClient() {
         ageGroup: '',
         documentType: '',
         description: '',
+        consent: false,
       }));
     } catch (error) {
       setErrorMessage(
@@ -227,6 +232,12 @@ export function ZakazatDokumentClient() {
                 />
               </label>
 
+              <PublicFormConsent
+                checked={form.consent}
+                onChange={(checked) => updateField('consent', checked)}
+                accentClassName="text-teal-600"
+              />
+
               {successMessage && (
                 <div className="rounded-xl border border-green-200 bg-green-50 px-4 py-3 text-sm text-green-800">
                   {successMessage}
@@ -249,7 +260,7 @@ export function ZakazatDokumentClient() {
               <div className="flex flex-col gap-3 sm:flex-row">
                 <button
                   type="submit"
-                  disabled={submitting || loading}
+                  disabled={submitting || loading || !form.consent}
                   className="inline-flex items-center justify-center gap-2 rounded-xl bg-teal-500 px-5 py-3 text-sm font-semibold text-white transition-colors hover:bg-teal-600 disabled:opacity-50"
                 >
                   {submitting ? <Loader2 className="h-4 w-4 animate-spin" /> : <FileText className="h-4 w-4" />}

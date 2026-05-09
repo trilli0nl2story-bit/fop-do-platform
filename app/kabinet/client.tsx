@@ -1,4 +1,4 @@
-'use client';
+﻿'use client';
 
 import { useState, useEffect } from 'react';
 import { useRouter, useSearchParams } from 'next/navigation';
@@ -30,6 +30,16 @@ interface AccountSummary {
   documentRequests: {
     total: number;
     items: Array<{ id: string; description: string; status: string; createdAt: string }>;
+  };
+  authorApplications: {
+    total: number;
+    items: Array<{
+      id: string;
+      status: string;
+      employmentType: string;
+      sampleUrl: string;
+      createdAt: string;
+    }>;
   };
   orders: {
     total: number;
@@ -95,33 +105,40 @@ interface UserOrderDetail {
 }
 
 const SUBSCRIPTION_LABELS: Record<string, string> = {
-  none: 'Подписка пока не подключена',
-  expired: 'Подписка истекла',
-  cancelled: 'Подписка отменена',
-  paused: 'Подписка приостановлена',
+  none: 'РџРѕРґРїРёСЃРєР° РїРѕРєР° РЅРµ РїРѕРґРєР»СЋС‡РµРЅР°',
+  expired: 'РџРѕРґРїРёСЃРєР° РёСЃС‚РµРєР»Р°',
+  cancelled: 'РџРѕРґРїРёСЃРєР° РѕС‚РјРµРЅРµРЅР°',
+  paused: 'РџРѕРґРїРёСЃРєР° РїСЂРёРѕСЃС‚Р°РЅРѕРІР»РµРЅР°',
 };
 
 const DOC_STATUS_LABELS: Record<string, string> = {
-  received: 'Получена',
-  in_progress: 'В работе',
-  draft_generated: 'Черновик готов',
-  under_review: 'На проверке',
-  completed: 'Выполнена',
-  rejected: 'Отклонена',
+  received: 'РџРѕР»СѓС‡РµРЅР°',
+  in_progress: 'Р’ СЂР°Р±РѕС‚Рµ',
+  draft_generated: 'Р§РµСЂРЅРѕРІРёРє РіРѕС‚РѕРІ',
+  under_review: 'РќР° РїСЂРѕРІРµСЂРєРµ',
+  completed: 'Р’С‹РїРѕР»РЅРµРЅР°',
+  rejected: 'РћС‚РєР»РѕРЅРµРЅР°',
 };
 
 const ORDER_STATUS_LABELS: Record<string, string> = {
-  pending: 'Ожидает оплату',
-  paid: 'Оплачен',
-  cancelled: 'Отменён',
-  refunded: 'Возврат',
+  pending: 'РћР¶РёРґР°РµС‚ РѕРїР»Р°С‚Сѓ',
+  paid: 'РћРїР»Р°С‡РµРЅ',
+  cancelled: 'РћС‚РјРµРЅС‘РЅ',
+  refunded: 'Р’РѕР·РІСЂР°С‚',
 };
 
 const PAYMENT_STATUS_LABELS: Record<string, string> = {
-  pending: 'Ожидает оплату',
-  succeeded: 'Оплачен',
-  failed: 'Ошибка',
-  refunded: 'Возврат',
+  pending: 'РћР¶РёРґР°РµС‚ РѕРїР»Р°С‚Сѓ',
+  succeeded: 'РћРїР»Р°С‡РµРЅ',
+  failed: 'РћС€РёР±РєР°',
+  refunded: 'Р’РѕР·РІСЂР°С‚',
+};
+
+const AUTHOR_STATUS_LABELS: Record<string, string> = {
+  pending: '\u041d\u0430 \u0440\u0430\u0441\u0441\u043c\u043e\u0442\u0440\u0435\u043d\u0438\u0438',
+  under_review: '\u041d\u0430 \u043f\u0440\u043e\u0432\u0435\u0440\u043a\u0435',
+  approved: '\u041e\u0434\u043e\u0431\u0440\u0435\u043d\u0430',
+  rejected: '\u041e\u0442\u043a\u043b\u043e\u043d\u0435\u043d\u0430',
 };
 
 function formatDate(iso: string) {
@@ -184,7 +201,7 @@ export function KabinetClient() {
         phone: data.profile?.phone ?? '',
       });
     } catch {
-      setSummaryError('Не удалось загрузить данные кабинета. Попробуйте обновить страницу.');
+      setSummaryError('РќРµ СѓРґР°Р»РѕСЃСЊ Р·Р°РіСЂСѓР·РёС‚СЊ РґР°РЅРЅС‹Рµ РєР°Р±РёРЅРµС‚Р°. РџРѕРїСЂРѕР±СѓР№С‚Рµ РѕР±РЅРѕРІРёС‚СЊ СЃС‚СЂР°РЅРёС†Сѓ.');
     } finally {
       setSummaryLoading(false);
     }
@@ -204,21 +221,21 @@ export function KabinetClient() {
       if (res.ok && data.ok) {
         const dl = data.download ?? {};
         setDlStates(prev => ({ ...prev, [slug]: 'ok' }));
-        setDlMessages(prev => ({ ...prev, [slug]: dl.message ?? 'Доступ подтверждён.' }));
+        setDlMessages(prev => ({ ...prev, [slug]: dl.message ?? 'Р”РѕСЃС‚СѓРї РїРѕРґС‚РІРµСЂР¶РґС‘РЅ.' }));
         if (dl.status === 'ready' && typeof dl.url === 'string' && dl.url) {
           setDlUrls(prev => ({ ...prev, [slug]: dl.url }));
           window.open(dl.url, '_blank', 'noopener,noreferrer');
         }
       } else if (res.status === 403) {
         setDlStates(prev => ({ ...prev, [slug]: 'denied' }));
-        setDlMessages(prev => ({ ...prev, [slug]: data.message ?? 'Доступ ограничен.' }));
+        setDlMessages(prev => ({ ...prev, [slug]: data.message ?? 'Р”РѕСЃС‚СѓРї РѕРіСЂР°РЅРёС‡РµРЅ.' }));
       } else {
         setDlStates(prev => ({ ...prev, [slug]: 'error' }));
-        setDlMessages(prev => ({ ...prev, [slug]: 'Не удалось открыть материал. Попробуйте ещё раз.' }));
+        setDlMessages(prev => ({ ...prev, [slug]: 'РќРµ СѓРґР°Р»РѕСЃСЊ РѕС‚РєСЂС‹С‚СЊ РјР°С‚РµСЂРёР°Р». РџРѕРїСЂРѕР±СѓР№С‚Рµ РµС‰С‘ СЂР°Р·.' }));
       }
     } catch {
       setDlStates(prev => ({ ...prev, [slug]: 'error' }));
-      setDlMessages(prev => ({ ...prev, [slug]: 'Не удалось открыть материал. Попробуйте ещё раз.' }));
+      setDlMessages(prev => ({ ...prev, [slug]: 'РќРµ СѓРґР°Р»РѕСЃСЊ РѕС‚РєСЂС‹С‚СЊ РјР°С‚РµСЂРёР°Р». РџРѕРїСЂРѕР±СѓР№С‚Рµ РµС‰С‘ СЂР°Р·.' }));
     }
   }
 
@@ -235,17 +252,17 @@ export function KabinetClient() {
 
       if (!res.ok) {
         setVerifyError(
-          data.message ?? data.error ?? 'Не удалось отправить письмо. Попробуйте ещё раз.'
+          data.message ?? data.error ?? 'РќРµ СѓРґР°Р»РѕСЃСЊ РѕС‚РїСЂР°РІРёС‚СЊ РїРёСЃСЊРјРѕ. РџРѕРїСЂРѕР±СѓР№С‚Рµ РµС‰С‘ СЂР°Р·.'
         );
         return;
       }
 
       setVerifyMessage(
         data.message ??
-          'Письмо для подтверждения отправлено. Проверьте почту и папку со спамом.'
+          'РџРёСЃСЊРјРѕ РґР»СЏ РїРѕРґС‚РІРµСЂР¶РґРµРЅРёСЏ РѕС‚РїСЂР°РІР»РµРЅРѕ. РџСЂРѕРІРµСЂСЊС‚Рµ РїРѕС‡С‚Сѓ Рё РїР°РїРєСѓ СЃРѕ СЃРїР°РјРѕРј.'
       );
     } catch {
-      setVerifyError('Не удалось отправить письмо. Проверьте соединение и попробуйте ещё раз.');
+      setVerifyError('РќРµ СѓРґР°Р»РѕСЃСЊ РѕС‚РїСЂР°РІРёС‚СЊ РїРёСЃСЊРјРѕ. РџСЂРѕРІРµСЂСЊС‚Рµ СЃРѕРµРґРёРЅРµРЅРёРµ Рё РїРѕРїСЂРѕР±СѓР№С‚Рµ РµС‰С‘ СЂР°Р·.');
     } finally {
       setVerifyLoading(false);
     }
@@ -258,7 +275,7 @@ export function KabinetClient() {
     fetch('/api/account/summary', { credentials: 'include' })
       .then(r => r.ok ? r.json() : Promise.reject(r.status))
       .then(data => setSummary(data))
-      .catch(() => setSummaryError('Не удалось загрузить данные кабинета. Попробуйте обновить страницу.'))
+      .catch(() => setSummaryError('РќРµ СѓРґР°Р»РѕСЃСЊ Р·Р°РіСЂСѓР·РёС‚СЊ РґР°РЅРЅС‹Рµ РєР°Р±РёРЅРµС‚Р°. РџРѕРїСЂРѕР±СѓР№С‚Рµ РѕР±РЅРѕРІРёС‚СЊ СЃС‚СЂР°РЅРёС†Сѓ.'))
       .finally(() => setSummaryLoading(false));
   }, [isAuthenticated]);
 
@@ -290,15 +307,15 @@ export function KabinetClient() {
 
       const data = await response.json().catch(() => ({}));
       if (!response.ok) {
-        setProfileError(data.error ?? 'Не удалось сохранить профиль. Попробуйте ещё раз.');
+        setProfileError(data.error ?? 'РќРµ СѓРґР°Р»РѕСЃСЊ СЃРѕС…СЂР°РЅРёС‚СЊ РїСЂРѕС„РёР»СЊ. РџРѕРїСЂРѕР±СѓР№С‚Рµ РµС‰С‘ СЂР°Р·.');
         return;
       }
 
       await loadSummary();
-      setProfileMessage('Профиль сохранён.');
+      setProfileMessage('РџСЂРѕС„РёР»СЊ СЃРѕС…СЂР°РЅС‘РЅ.');
       setProfileEditOpen(false);
     } catch {
-      setProfileError('Не удалось сохранить профиль. Проверьте соединение и попробуйте ещё раз.');
+      setProfileError('РќРµ СѓРґР°Р»РѕСЃСЊ СЃРѕС…СЂР°РЅРёС‚СЊ РїСЂРѕС„РёР»СЊ. РџСЂРѕРІРµСЂСЊС‚Рµ СЃРѕРµРґРёРЅРµРЅРёРµ Рё РїРѕРїСЂРѕР±СѓР№С‚Рµ РµС‰С‘ СЂР°Р·.');
     } finally {
       setProfileSaving(false);
     }
@@ -309,9 +326,9 @@ export function KabinetClient() {
 
     try {
       await navigator.clipboard.writeText(`${window.location.origin}${referral.linkPath}`);
-      setReferralMessage('Ссылка скопирована.');
+      setReferralMessage('РЎСЃС‹Р»РєР° СЃРєРѕРїРёСЂРѕРІР°РЅР°.');
     } catch {
-      setReferralMessage('Не удалось скопировать ссылку автоматически.');
+      setReferralMessage('РќРµ СѓРґР°Р»РѕСЃСЊ СЃРєРѕРїРёСЂРѕРІР°С‚СЊ СЃСЃС‹Р»РєСѓ Р°РІС‚РѕРјР°С‚РёС‡РµСЃРєРё.');
     }
 
     window.setTimeout(() => setReferralMessage(''), 2500);
@@ -362,10 +379,10 @@ export function KabinetClient() {
         refresh();
         router.push('/vhod');
       } else {
-        setLogoutError('Не удалось выйти из аккаунта. Попробуйте ещё раз.');
+        setLogoutError('РќРµ СѓРґР°Р»РѕСЃСЊ РІС‹Р№С‚Рё РёР· Р°РєРєР°СѓРЅС‚Р°. РџРѕРїСЂРѕР±СѓР№С‚Рµ РµС‰С‘ СЂР°Р·.');
       }
     } catch {
-      setLogoutError('Ошибка соединения. Попробуйте ещё раз.');
+      setLogoutError('РћС€РёР±РєР° СЃРѕРµРґРёРЅРµРЅРёСЏ. РџРѕРїСЂРѕР±СѓР№С‚Рµ РµС‰С‘ СЂР°Р·.');
     } finally {
       setLogoutLoading(false);
     }
@@ -388,28 +405,28 @@ export function KabinetClient() {
         setLogoutAllError(
           data.message ??
             data.error ??
-            'Не удалось завершить сессии на других устройствах. Попробуйте ещё раз.'
+            'РќРµ СѓРґР°Р»РѕСЃСЊ Р·Р°РІРµСЂС€РёС‚СЊ СЃРµСЃСЃРёРё РЅР° РґСЂСѓРіРёС… СѓСЃС‚СЂРѕР№СЃС‚РІР°С…. РџРѕРїСЂРѕР±СѓР№С‚Рµ РµС‰С‘ СЂР°Р·.'
         );
       }
     } catch {
       setLogoutAllError(
-        'Не удалось завершить сессии на других устройствах. Проверьте соединение и попробуйте ещё раз.'
+        'РќРµ СѓРґР°Р»РѕСЃСЊ Р·Р°РІРµСЂС€РёС‚СЊ СЃРµСЃСЃРёРё РЅР° РґСЂСѓРіРёС… СѓСЃС‚СЂРѕР№СЃС‚РІР°С…. РџСЂРѕРІРµСЂСЊС‚Рµ СЃРѕРµРґРёРЅРµРЅРёРµ Рё РїРѕРїСЂРѕР±СѓР№С‚Рµ РµС‰С‘ СЂР°Р·.'
       );
     } finally {
       setLogoutAllLoading(false);
     }
   }
 
-  // ── Loading ───────────────────────────────────────────────────────────────
+  // в”Ђв”Ђ Loading в”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђ
   if (loading) {
     return (
       <div className="min-h-screen bg-gradient-to-b from-blue-50 to-white flex items-center justify-center">
-        <p className="text-gray-500 text-sm">Загрузка...</p>
+        <p className="text-gray-500 text-sm">Р—Р°РіСЂСѓР·РєР°...</p>
       </div>
     );
   }
 
-  // ── Not authenticated ─────────────────────────────────────────────────────
+  // в”Ђв”Ђ Not authenticated в”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђ
   if (!isAuthenticated) {
     return (
       <div className="min-h-screen bg-gradient-to-b from-blue-50 to-white flex items-center justify-center px-4">
@@ -417,22 +434,22 @@ export function KabinetClient() {
           <div className="w-14 h-14 bg-blue-100 rounded-2xl flex items-center justify-center mx-auto mb-5">
             <User className="w-7 h-7 text-blue-500" />
           </div>
-          <h1 className="text-2xl font-bold text-gray-900 mb-3">Личный кабинет</h1>
+          <h1 className="text-2xl font-bold text-gray-900 mb-3">Р›РёС‡РЅС‹Р№ РєР°Р±РёРЅРµС‚</h1>
           <p className="text-gray-600 mb-8">
-            Войдите в аккаунт, чтобы открыть личный кабинет.
+            Р’РѕР№РґРёС‚Рµ РІ Р°РєРєР°СѓРЅС‚, С‡С‚РѕР±С‹ РѕС‚РєСЂС‹С‚СЊ Р»РёС‡РЅС‹Р№ РєР°Р±РёРЅРµС‚.
           </p>
           <div className="flex flex-col sm:flex-row gap-3 justify-center">
             <Link
               href="/vhod"
               className="inline-flex items-center justify-center px-6 py-3 bg-blue-500 hover:bg-blue-600 text-white font-semibold rounded-xl transition-colors"
             >
-              Войти
+              Р’РѕР№С‚Рё
             </Link>
             <Link
               href="/registratsiya"
               className="inline-flex items-center justify-center px-6 py-3 border border-gray-300 hover:border-gray-400 text-gray-700 font-semibold rounded-xl transition-colors"
             >
-              Зарегистрироваться
+              Р—Р°СЂРµРіРёСЃС‚СЂРёСЂРѕРІР°С‚СЊСЃСЏ
             </Link>
           </div>
         </div>
@@ -444,11 +461,12 @@ export function KabinetClient() {
   const sub = summary?.subscription;
   const mats = summary?.materials;
   const docs = summary?.documentRequests;
+  const authorApplications = summary?.authorApplications;
   const orders = summary?.orders;
   const referral = summary?.referral;
   const ai = summary?.ai;
 
-  // ── Authenticated ─────────────────────────────────────────────────────────
+  // в”Ђв”Ђ Authenticated в”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђ
   return (
     <div className="min-h-screen bg-gray-50">
       {/* Header bar */}
@@ -456,10 +474,10 @@ export function KabinetClient() {
         <div className="max-w-4xl mx-auto px-4 sm:px-6 h-14 flex items-center justify-between">
           <Link href="/" className="flex items-center gap-2">
             <div className="w-7 h-7 bg-blue-500 rounded-md flex items-center justify-center text-white font-bold text-sm">
-              М
+              Рњ
             </div>
             <span className="text-sm font-semibold text-gray-900 hidden sm:block">
-              Методический кабинет педагога
+              РњРµС‚РѕРґРёС‡РµСЃРєРёР№ РєР°Р±РёРЅРµС‚ РїРµРґР°РіРѕРіР°
             </span>
           </Link>
           <button
@@ -468,7 +486,7 @@ export function KabinetClient() {
             className="flex items-center gap-1.5 px-3 py-1.5 text-sm font-medium text-gray-500 hover:text-red-600 hover:bg-red-50 rounded-lg transition-colors disabled:opacity-50"
           >
             <LogOut className="w-4 h-4" />
-            <span className="hidden sm:inline">{logoutLoading ? 'Выход...' : 'Выйти'}</span>
+            <span className="hidden sm:inline">{logoutLoading ? 'Р’С‹С…РѕРґ...' : 'Р’С‹Р№С‚Рё'}</span>
           </button>
         </div>
       </div>
@@ -484,7 +502,7 @@ export function KabinetClient() {
 
         {searchParams.get('emailVerification') === 'success' && (
           <div className="bg-green-50 border border-green-200 rounded-xl px-4 py-3 text-sm text-green-800">
-            Почта подтверждена. Теперь аккаунт полностью активирован.
+            РџРѕС‡С‚Р° РїРѕРґС‚РІРµСЂР¶РґРµРЅР°. РўРµРїРµСЂСЊ Р°РєРєР°СѓРЅС‚ РїРѕР»РЅРѕСЃС‚СЊСЋ Р°РєС‚РёРІРёСЂРѕРІР°РЅ.
           </div>
         )}
 
@@ -493,12 +511,12 @@ export function KabinetClient() {
             <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
               <div className="space-y-1">
                 <p className="text-sm font-semibold text-amber-900">
-                  Подтвердите email, чтобы завершить настройку аккаунта
+                  РџРѕРґС‚РІРµСЂРґРёС‚Рµ email, С‡С‚РѕР±С‹ Р·Р°РІРµСЂС€РёС‚СЊ РЅР°СЃС‚СЂРѕР№РєСѓ Р°РєРєР°СѓРЅС‚Р°
                 </p>
                 <p className="text-sm text-amber-800">
                   {summary.emailVerification.deliveryConfigured
-                    ? `Мы отправили письмо на ${summary.user.email}. Если письма нет, проверьте папку со спамом или отправьте его повторно.`
-                    : 'Аккаунт уже создан, но отправка писем на сервере пока не подключена. После настройки SMTP здесь можно будет сразу отправить письмо для подтверждения.'}
+                    ? `РњС‹ РѕС‚РїСЂР°РІРёР»Рё РїРёСЃСЊРјРѕ РЅР° ${summary.user.email}. Р•СЃР»Рё РїРёСЃСЊРјР° РЅРµС‚, РїСЂРѕРІРµСЂСЊС‚Рµ РїР°РїРєСѓ СЃРѕ СЃРїР°РјРѕРј РёР»Рё РѕС‚РїСЂР°РІСЊС‚Рµ РµРіРѕ РїРѕРІС‚РѕСЂРЅРѕ.`
+                    : 'РђРєРєР°СѓРЅС‚ СѓР¶Рµ СЃРѕР·РґР°РЅ, РЅРѕ РѕС‚РїСЂР°РІРєР° РїРёСЃРµРј РЅР° СЃРµСЂРІРµСЂРµ РїРѕРєР° РЅРµ РїРѕРґРєР»СЋС‡РµРЅР°. РџРѕСЃР»Рµ РЅР°СЃС‚СЂРѕР№РєРё SMTP Р·РґРµСЃСЊ РјРѕР¶РЅРѕ Р±СѓРґРµС‚ СЃСЂР°Р·Сѓ РѕС‚РїСЂР°РІРёС‚СЊ РїРёСЃСЊРјРѕ РґР»СЏ РїРѕРґС‚РІРµСЂР¶РґРµРЅРёСЏ.'}
                 </p>
               </div>
               <button
@@ -507,10 +525,10 @@ export function KabinetClient() {
                 className="inline-flex items-center justify-center px-4 py-2 bg-amber-500 hover:bg-amber-600 text-white text-sm font-medium rounded-xl transition-colors disabled:opacity-50"
               >
                 {verifyLoading
-                  ? 'Отправка...'
+                  ? 'РћС‚РїСЂР°РІРєР°...'
                   : summary.emailVerification.deliveryConfigured
-                    ? 'Отправить письмо ещё раз'
-                    : 'Письма пока не подключены'}
+                    ? 'РћС‚РїСЂР°РІРёС‚СЊ РїРёСЃСЊРјРѕ РµС‰С‘ СЂР°Р·'
+                    : 'РџРёСЃСЊРјР° РїРѕРєР° РЅРµ РїРѕРґРєР»СЋС‡РµРЅС‹'}
               </button>
             </div>
             {verifyMessage && (
@@ -537,7 +555,7 @@ export function KabinetClient() {
               <p className="text-sm text-gray-500 truncate">{user?.email}</p>
               <div className="flex flex-wrap gap-2 pt-1">
                 <span className="inline-flex items-center gap-1 px-2.5 py-0.5 bg-green-50 text-green-700 text-xs font-medium rounded-full border border-green-100">
-                  ✓ Аккаунт активен
+                  вњ“ РђРєРєР°СѓРЅС‚ Р°РєС‚РёРІРµРЅ
                 </span>
                 {prof?.role && (
                   <span className="inline-flex items-center gap-1 px-2.5 py-0.5 bg-blue-50 text-blue-700 text-xs font-medium rounded-full border border-blue-100">
@@ -565,7 +583,7 @@ export function KabinetClient() {
               }}
               className="flex-shrink-0 px-3 py-1.5 border border-gray-200 hover:border-gray-300 text-gray-700 text-sm font-medium rounded-xl transition-colors"
             >
-              {profileEditOpen ? 'Скрыть' : 'Редактировать'}
+              {profileEditOpen ? 'РЎРєСЂС‹С‚СЊ' : 'Р РµРґР°РєС‚РёСЂРѕРІР°С‚СЊ'}
             </button>
           </div>
           {profileMessage && (
@@ -579,44 +597,44 @@ export function KabinetClient() {
                 <input
                   value={profileForm.name}
                   onChange={(event) => setProfileForm(prev => ({ ...prev, name: event.target.value }))}
-                  placeholder="Имя"
+                  placeholder="РРјСЏ"
                   className="px-3 py-2.5 rounded-xl border border-gray-200 text-sm outline-none focus:border-blue-400 bg-white"
                 />
                 <input
                   value={profileForm.lastName}
                   onChange={(event) => setProfileForm(prev => ({ ...prev, lastName: event.target.value }))}
-                  placeholder="Фамилия"
+                  placeholder="Р¤Р°РјРёР»РёСЏ"
                   className="px-3 py-2.5 rounded-xl border border-gray-200 text-sm outline-none focus:border-blue-400 bg-white"
                 />
                 <input
                   value={profileForm.patronymic}
                   onChange={(event) => setProfileForm(prev => ({ ...prev, patronymic: event.target.value }))}
-                  placeholder="Отчество"
+                  placeholder="РћС‚С‡РµСЃС‚РІРѕ"
                   className="px-3 py-2.5 rounded-xl border border-gray-200 text-sm outline-none focus:border-blue-400 bg-white"
                 />
                 <input
                   value={profileForm.role}
                   onChange={(event) => setProfileForm(prev => ({ ...prev, role: event.target.value }))}
-                  placeholder="Роль"
+                  placeholder="Р РѕР»СЊ"
                   className="px-3 py-2.5 rounded-xl border border-gray-200 text-sm outline-none focus:border-blue-400 bg-white"
                 />
                 <input
                   value={profileForm.city}
                   onChange={(event) => setProfileForm(prev => ({ ...prev, city: event.target.value }))}
-                  placeholder="Город"
+                  placeholder="Р“РѕСЂРѕРґ"
                   className="px-3 py-2.5 rounded-xl border border-gray-200 text-sm outline-none focus:border-blue-400 bg-white"
                 />
                 <input
                   value={profileForm.institution}
                   onChange={(event) => setProfileForm(prev => ({ ...prev, institution: event.target.value }))}
-                  placeholder="Учреждение"
+                  placeholder="РЈС‡СЂРµР¶РґРµРЅРёРµ"
                   className="px-3 py-2.5 rounded-xl border border-gray-200 text-sm outline-none focus:border-blue-400 bg-white"
                 />
               </div>
               <input
                 value={profileForm.phone}
                 onChange={(event) => setProfileForm(prev => ({ ...prev, phone: event.target.value }))}
-                placeholder="Телефон"
+                placeholder="РўРµР»РµС„РѕРЅ"
                 className="w-full px-3 py-2.5 rounded-xl border border-gray-200 text-sm outline-none focus:border-blue-400 bg-white"
               />
               {profileError && (
@@ -629,7 +647,7 @@ export function KabinetClient() {
                   disabled={profileSaving}
                   className="px-4 py-2 bg-blue-500 hover:bg-blue-600 text-white text-sm font-medium rounded-xl transition-colors disabled:opacity-50"
                 >
-                  {profileSaving ? 'Сохраняем...' : 'Сохранить профиль'}
+                  {profileSaving ? 'РЎРѕС…СЂР°РЅСЏРµРј...' : 'РЎРѕС…СЂР°РЅРёС‚СЊ РїСЂРѕС„РёР»СЊ'}
                 </button>
                 <button
                   type="button"
@@ -651,7 +669,7 @@ export function KabinetClient() {
                   }}
                   className="px-4 py-2 border border-gray-200 hover:border-gray-300 text-gray-700 text-sm font-medium rounded-xl transition-colors"
                 >
-                  Отмена
+                  РћС‚РјРµРЅР°
                 </button>
               </div>
             </div>
@@ -667,10 +685,10 @@ export function KabinetClient() {
               disabled={logoutAllLoading}
               className="inline-flex items-center justify-center px-4 py-2 border border-gray-200 hover:border-gray-300 text-gray-700 text-sm font-medium rounded-xl transition-colors disabled:opacity-50"
             >
-              {logoutAllLoading ? 'Завершаем все сессии...' : 'Выйти на всех устройствах'}
+              {logoutAllLoading ? 'Р—Р°РІРµСЂС€Р°РµРј РІСЃРµ СЃРµСЃСЃРёРё...' : 'Р’С‹Р№С‚Рё РЅР° РІСЃРµС… СѓСЃС‚СЂРѕР№СЃС‚РІР°С…'}
             </button>
             <p className="mt-2 text-xs text-gray-500">
-              Полезно, если вы заходили с чужого компьютера или хотите сбросить все старые входы.
+              РџРѕР»РµР·РЅРѕ, РµСЃР»Рё РІС‹ Р·Р°С…РѕРґРёР»Рё СЃ С‡СѓР¶РѕРіРѕ РєРѕРјРїСЊСЋС‚РµСЂР° РёР»Рё С…РѕС‚РёС‚Рµ СЃР±СЂРѕСЃРёС‚СЊ РІСЃРµ СЃС‚Р°СЂС‹Рµ РІС…РѕРґС‹.
             </p>
             {logoutAllError && (
               <p className="mt-3 text-sm text-red-600 bg-red-50 border border-red-100 rounded-xl px-4 py-3">
@@ -689,19 +707,19 @@ export function KabinetClient() {
               <div className="w-9 h-9 bg-purple-50 rounded-xl flex items-center justify-center">
                 <Star className="w-5 h-5 text-purple-500" />
               </div>
-              <p className="text-sm font-semibold text-gray-800">Подписка</p>
+              <p className="text-sm font-semibold text-gray-800">РџРѕРґРїРёСЃРєР°</p>
             </div>
             {summaryLoading ? (
-              <p className="text-sm text-gray-400">Загрузка...</p>
+              <p className="text-sm text-gray-400">Р—Р°РіСЂСѓР·РєР°...</p>
             ) : sub?.status === 'active' ? (
               <p className="text-sm text-green-700 font-medium">
-                Подписка активна{sub.currentPeriodEnd ? ` до ${formatDate(sub.currentPeriodEnd)}` : ''}
+                РџРѕРґРїРёСЃРєР° Р°РєС‚РёРІРЅР°{sub.currentPeriodEnd ? ` РґРѕ ${formatDate(sub.currentPeriodEnd)}` : ''}
               </p>
             ) : (
               <>
                 <p className="text-sm text-gray-500">{SUBSCRIPTION_LABELS[sub?.status ?? 'none']}</p>
                 <Link href="/materialy/podpiska" className="inline-block mt-3 text-xs font-medium text-blue-500 hover:text-blue-600">
-                  Подключить →
+                  РџРѕРґРєР»СЋС‡РёС‚СЊ в†’
                 </Link>
               </>
             )}
@@ -714,11 +732,11 @@ export function KabinetClient() {
                 <ShoppingBag className="w-5 h-5 text-amber-500" />
               </div>
               <p className="text-sm font-semibold text-gray-800">
-                Купленные материалы{mats && mats.total > 0 ? ` (${mats.total})` : ''}
+                РљСѓРїР»РµРЅРЅС‹Рµ РјР°С‚РµСЂРёР°Р»С‹{mats && mats.total > 0 ? ` (${mats.total})` : ''}
               </p>
             </div>
             {summaryLoading ? (
-              <p className="text-sm text-gray-400">Загрузка...</p>
+              <p className="text-sm text-gray-400">Р—Р°РіСЂСѓР·РєР°...</p>
             ) : mats && mats.total > 0 ? (
               <ul className="space-y-3">
                 {mats.items.map(m => {
@@ -736,7 +754,7 @@ export function KabinetClient() {
                         {ds === 'ok' ? (
                           <span className="inline-flex items-center gap-1 text-xs text-green-700 flex-shrink-0">
                             <CheckCircle2 className="w-3.5 h-3.5" />
-                            {dlUrls[m.slug] ? 'Ссылка открыта ✓' : 'Доступ открыт'}
+                            {dlUrls[m.slug] ? 'РЎСЃС‹Р»РєР° РѕС‚РєСЂС‹С‚Р° вњ“' : 'Р”РѕСЃС‚СѓРї РѕС‚РєСЂС‹С‚'}
                           </span>
                         ) : (
                           <button
@@ -748,7 +766,7 @@ export function KabinetClient() {
                               ? <Loader2 className="w-3.5 h-3.5 animate-spin" />
                               : <Download className="w-3.5 h-3.5" />
                             }
-                            {ds === 'loading' ? 'Открытие...' : 'Скачать'}
+                            {ds === 'loading' ? 'РћС‚РєСЂС‹С‚РёРµ...' : 'РЎРєР°С‡Р°С‚СЊ'}
                           </button>
                         )}
                       </div>
@@ -762,15 +780,15 @@ export function KabinetClient() {
                 })}
                 {mats.total > mats.items.length && (
                   <li className="text-xs text-gray-400 pt-1">
-                    + ещё {mats.total - mats.items.length} материалов
+                    + РµС‰С‘ {mats.total - mats.items.length} РјР°С‚РµСЂРёР°Р»РѕРІ
                   </li>
                 )}
               </ul>
             ) : (
               <>
-                <p className="text-sm text-gray-500">Купленные материалы появятся здесь</p>
+                <p className="text-sm text-gray-500">РљСѓРїР»РµРЅРЅС‹Рµ РјР°С‚РµСЂРёР°Р»С‹ РїРѕСЏРІСЏС‚СЃСЏ Р·РґРµСЃСЊ</p>
                 <Link href="/materialy/magazin" className="inline-block mt-3 text-xs font-medium text-blue-500 hover:text-blue-600">
-                  В магазин →
+                  Р’ РјР°РіР°Р·РёРЅ в†’
                 </Link>
               </>
             )}
@@ -783,27 +801,27 @@ export function KabinetClient() {
                 <ShoppingBag className="w-5 h-5 text-emerald-600" />
               </div>
               <p className="text-sm font-semibold text-gray-800">
-                Заказы{orders && orders.total > 0 ? ` (${orders.total})` : ''}
+                Р—Р°РєР°Р·С‹{orders && orders.total > 0 ? ` (${orders.total})` : ''}
               </p>
             </div>
             {summaryLoading ? (
-              <p className="text-sm text-gray-400">Загрузка...</p>
+              <p className="text-sm text-gray-400">Р—Р°РіСЂСѓР·РєР°...</p>
             ) : orders && orders.total > 0 ? (
               <div className="space-y-2">
                 <p className="text-sm text-gray-700">
-                  Оплачено на сумму <span className="font-semibold">{orders.paidTotalRubles.toLocaleString('ru-RU')} ₽</span>
+                  РћРїР»Р°С‡РµРЅРѕ РЅР° СЃСѓРјРјСѓ <span className="font-semibold">{orders.paidTotalRubles.toLocaleString('ru-RU')} в‚Ѕ</span>
                 </p>
                 <ul className="space-y-2">
                   {orders.items.slice(0, 3).map((order) => (
                     <li key={order.id} className="text-xs text-gray-500">
-                      {order.status === 'paid' ? 'Оплачен' : order.status === 'pending' ? 'Ожидает оплату' : order.status}
-                      {' '}· {order.totalRubles.toLocaleString('ru-RU')} ₽ · {formatDate(order.createdAt)}
+                      {order.status === 'paid' ? 'РћРїР»Р°С‡РµРЅ' : order.status === 'pending' ? 'РћР¶РёРґР°РµС‚ РѕРїР»Р°С‚Сѓ' : order.status}
+                      {' '}В· {order.totalRubles.toLocaleString('ru-RU')} в‚Ѕ В· {formatDate(order.createdAt)}
                     </li>
                   ))}
                 </ul>
               </div>
             ) : (
-              <p className="text-sm text-gray-500">Оплаченные заказы появятся здесь после первых покупок.</p>
+              <p className="text-sm text-gray-500">РћРїР»Р°С‡РµРЅРЅС‹Рµ Р·Р°РєР°Р·С‹ РїРѕСЏРІСЏС‚СЃСЏ Р·РґРµСЃСЊ РїРѕСЃР»Рµ РїРµСЂРІС‹С… РїРѕРєСѓРїРѕРє.</p>
             )}
           </div>
 
@@ -813,28 +831,28 @@ export function KabinetClient() {
               <div className="w-9 h-9 bg-emerald-50 rounded-xl flex items-center justify-center">
                 <Bot className="w-5 h-5 text-emerald-500" />
               </div>
-              <p className="text-sm font-semibold text-gray-800">AI-запросы</p>
+              <p className="text-sm font-semibold text-gray-800">AI-Р·Р°РїСЂРѕСЃС‹</p>
             </div>
             {summaryLoading ? (
-              <p className="text-sm text-gray-400">Загрузка...</p>
+              <p className="text-sm text-gray-400">Р—Р°РіСЂСѓР·РєР°...</p>
             ) : ai ? (
               <div className="space-y-2">
                 <p className="text-sm text-gray-700">
-                  Осталось <span className="font-semibold">{ai.remainingThisMonth}</span> из {ai.monthlyLimit} в этом месяце
+                  РћСЃС‚Р°Р»РѕСЃСЊ <span className="font-semibold">{ai.remainingThisMonth}</span> РёР· {ai.monthlyLimit} РІ СЌС‚РѕРј РјРµСЃСЏС†Рµ
                 </p>
                 <p className="text-xs text-gray-500">
                   {ai.subscriptionActive
                     ? ai.configured
-                      ? 'Помощник доступен по активной подписке.'
-                      : 'Ключ OpenAI ещё не добавлен на сервер.'
-                    : 'AI-помощник откроется после подключения подписки.'}
+                      ? 'РџРѕРјРѕС‰РЅРёРє РґРѕСЃС‚СѓРїРµРЅ РїРѕ Р°РєС‚РёРІРЅРѕР№ РїРѕРґРїРёСЃРєРµ.'
+                      : 'РљР»СЋС‡ OpenAI РµС‰С‘ РЅРµ РґРѕР±Р°РІР»РµРЅ РЅР° СЃРµСЂРІРµСЂ.'
+                    : 'AI-РїРѕРјРѕС‰РЅРёРє РѕС‚РєСЂРѕРµС‚СЃСЏ РїРѕСЃР»Рµ РїРѕРґРєР»СЋС‡РµРЅРёСЏ РїРѕРґРїРёСЃРєРё.'}
                 </p>
                 <Link href="/pomoshchnik" className="inline-block pt-1 text-xs font-medium text-blue-500 hover:text-blue-600">
-                  Открыть помощника →
+                  РћС‚РєСЂС‹С‚СЊ РїРѕРјРѕС‰РЅРёРєР° в†’
                 </Link>
               </div>
             ) : (
-              <p className="text-sm text-gray-500">Статус помощника появится здесь автоматически.</p>
+              <p className="text-sm text-gray-500">РЎС‚Р°С‚СѓСЃ РїРѕРјРѕС‰РЅРёРєР° РїРѕСЏРІРёС‚СЃСЏ Р·РґРµСЃСЊ Р°РІС‚РѕРјР°С‚РёС‡РµСЃРєРё.</p>
             )}
           </div>
 
@@ -844,37 +862,37 @@ export function KabinetClient() {
               <div className="w-9 h-9 bg-sky-50 rounded-xl flex items-center justify-center">
                 <Share2 className="w-5 h-5 text-sky-500" />
               </div>
-              <p className="text-sm font-semibold text-gray-800">Реферальная скидка</p>
+              <p className="text-sm font-semibold text-gray-800">Р РµС„РµСЂР°Р»СЊРЅР°СЏ СЃРєРёРґРєР°</p>
             </div>
             {summaryLoading ? (
-              <p className="text-sm text-gray-400">Загрузка...</p>
+              <p className="text-sm text-gray-400">Р—Р°РіСЂСѓР·РєР°...</p>
             ) : referral ? (
               <div className="space-y-2">
                 <p className="text-sm text-gray-700">
-                  Ваш код: <span className="font-semibold tracking-wide">{referral.code}</span>
+                  Р’Р°С€ РєРѕРґ: <span className="font-semibold tracking-wide">{referral.code}</span>
                 </p>
                 <p className="text-xs text-gray-500">
-                  Дает {referral.discountPercent}% скидки на первый оплаченный заказ.
+                  Р”Р°РµС‚ {referral.discountPercent}% СЃРєРёРґРєРё РЅР° РїРµСЂРІС‹Р№ РѕРїР»Р°С‡РµРЅРЅС‹Р№ Р·Р°РєР°Р·.
                 </p>
                 <p className="text-xs text-gray-500">
-                  Пришло по вашей ссылке: {referral.registeredCount}, оплатили: {referral.paidCount}
+                  РџСЂРёС€Р»Рѕ РїРѕ РІР°С€РµР№ СЃСЃС‹Р»РєРµ: {referral.registeredCount}, РѕРїР»Р°С‚РёР»Рё: {referral.paidCount}
                 </p>
               </div>
             ) : (
-              <p className="text-sm text-gray-500">Реферальный код появится здесь автоматически.</p>
+              <p className="text-sm text-gray-500">Р РµС„РµСЂР°Р»СЊРЅС‹Р№ РєРѕРґ РїРѕСЏРІРёС‚СЃСЏ Р·РґРµСЃСЊ Р°РІС‚РѕРјР°С‚РёС‡РµСЃРєРё.</p>
             )}
           </div>
 
           {referral && (
             <div className="bg-white rounded-2xl border border-gray-200 shadow-sm p-5 sm:col-span-2">
-              <p className="text-xs font-semibold text-gray-500 uppercase tracking-wide mb-3">Реферальная ссылка</p>
+              <p className="text-xs font-semibold text-gray-500 uppercase tracking-wide mb-3">Р РµС„РµСЂР°Р»СЊРЅР°СЏ СЃСЃС‹Р»РєР°</p>
               <div className="flex flex-col sm:flex-row sm:items-center gap-3">
                 <button
                   type="button"
                   onClick={handleCopyReferralLink}
                   className="inline-flex items-center justify-center px-4 py-2 bg-sky-500 hover:bg-sky-600 text-white text-sm font-medium rounded-xl transition-colors"
                 >
-                  Скопировать ссылку
+                  РЎРєРѕРїРёСЂРѕРІР°С‚СЊ СЃСЃС‹Р»РєСѓ
                 </button>
                 <span className="text-sm text-gray-500 break-all">{referral.linkPath}</span>
               </div>
@@ -883,11 +901,11 @@ export function KabinetClient() {
               )}
               {referral.recentInvites.length > 0 && (
                 <div className="mt-4 space-y-2">
-                  <p className="text-sm font-medium text-gray-700">Последние переходы по вашей ссылке</p>
+                  <p className="text-sm font-medium text-gray-700">РџРѕСЃР»РµРґРЅРёРµ РїРµСЂРµС…РѕРґС‹ РїРѕ РІР°С€РµР№ СЃСЃС‹Р»РєРµ</p>
                   <ul className="space-y-1">
                     {referral.recentInvites.slice(0, 3).map((invite) => (
                       <li key={invite.id} className="text-sm text-gray-500">
-                        {invite.email} · {invite.status}
+                        {invite.email} В· {invite.status}
                       </li>
                     ))}
                   </ul>
@@ -898,7 +916,7 @@ export function KabinetClient() {
 
           {orders && orders.total > 0 && (
             <div className="bg-white rounded-2xl border border-gray-200 shadow-sm p-5 sm:col-span-2">
-              <p className="text-xs font-semibold text-gray-500 uppercase tracking-wide mb-3">История заказов</p>
+              <p className="text-xs font-semibold text-gray-500 uppercase tracking-wide mb-3">РСЃС‚РѕСЂРёСЏ Р·Р°РєР°Р·РѕРІ</p>
               <div className="space-y-3">
                 {orders.items.map((order) => {
                   const detail = orderDetails[order.id];
@@ -921,7 +939,7 @@ export function KabinetClient() {
                             </p>
                           </div>
                           <p className="text-sm font-semibold text-gray-900">
-                            {order.totalRubles.toLocaleString('ru-RU')} ₽
+                            {order.totalRubles.toLocaleString('ru-RU')} в‚Ѕ
                           </p>
                         </div>
                       </button>
@@ -929,14 +947,14 @@ export function KabinetClient() {
                       {expanded && (
                         <div className="mt-3 border-t border-gray-100 pt-3 space-y-2">
                           {orderDetailsLoadingId === order.id ? (
-                            <p className="text-xs text-gray-400">Загружаем детали заказа...</p>
+                            <p className="text-xs text-gray-400">Р—Р°РіСЂСѓР¶Р°РµРј РґРµС‚Р°Р»Рё Р·Р°РєР°Р·Р°...</p>
                           ) : detail ? (
                             <>
                               {detail.payment && (
                                 <div className="space-y-2">
                                   <p className="text-xs text-gray-500">
-                                    Платёж: {PAYMENT_STATUS_LABELS[detail.payment.status] ?? detail.payment.status}
-                                    {' '}· {detail.payment.amountRubles.toLocaleString('ru-RU')} ₽
+                                    РџР»Р°С‚С‘Р¶: {PAYMENT_STATUS_LABELS[detail.payment.status] ?? detail.payment.status}
+                                    {' '}В· {detail.payment.amountRubles.toLocaleString('ru-RU')} в‚Ѕ
                                   </p>
                                   {detail.payment.resumePaymentUrl && (
                                     <button
@@ -945,7 +963,7 @@ export function KabinetClient() {
                                       className="inline-flex items-center gap-1.5 rounded-lg bg-blue-50 px-3 py-2 text-xs font-medium text-blue-600 transition-colors hover:bg-blue-100"
                                     >
                                       <ShoppingBag className="h-3.5 w-3.5" />
-                                      Продолжить оплату
+                                      РџСЂРѕРґРѕР»Р¶РёС‚СЊ РѕРїР»Р°С‚Сѓ
                                     </button>
                                   )}
                                 </div>
@@ -953,13 +971,13 @@ export function KabinetClient() {
                               <ul className="space-y-1">
                                 {detail.items.map((item) => (
                                   <li key={`${order.id}-${item.materialId}`} className="text-xs text-gray-500">
-                                    {item.title} · {item.priceRubles.toLocaleString('ru-RU')} ₽
+                                    {item.title} В· {item.priceRubles.toLocaleString('ru-RU')} в‚Ѕ
                                   </li>
                                 ))}
                               </ul>
                             </>
                           ) : (
-                            <p className="text-xs text-red-500">Не удалось загрузить детали заказа.</p>
+                            <p className="text-xs text-red-500">РќРµ СѓРґР°Р»РѕСЃСЊ Р·Р°РіСЂСѓР·РёС‚СЊ РґРµС‚Р°Р»Рё Р·Р°РєР°Р·Р°.</p>
                           )}
                         </div>
                       )}
@@ -970,6 +988,57 @@ export function KabinetClient() {
             </div>
           )}
 
+                    {/* Author applications */}
+          <div className="bg-white rounded-2xl border border-gray-200 shadow-sm p-5 sm:col-span-2">
+            <div className="flex items-center gap-3 mb-3">
+              <div className="w-9 h-9 bg-green-50 rounded-xl flex items-center justify-center">
+                <BookOpen className="w-5 h-5 text-green-600" />
+              </div>
+              <p className="text-sm font-semibold text-gray-800">
+                {"\u0410\u0432\u0442\u043e\u0440\u0441\u043a\u0438\u0435 \u0437\u0430\u044f\u0432\u043a\u0438"}{authorApplications && authorApplications.total > 0 ? ` (${authorApplications.total})` : ''}
+              </p>
+            </div>
+            {summaryLoading ? (
+              <p className="text-sm text-gray-400">{"\u0417\u0430\u0433\u0440\u0443\u0437\u043a\u0430..."}</p>
+            ) : authorApplications && authorApplications.total > 0 ? (
+              <ul className="space-y-2">
+                {authorApplications.items.map((application) => (
+                  <li key={application.id} className="flex items-start gap-3">
+                    <span className={`mt-0.5 inline-block px-2 py-0.5 text-xs font-medium rounded-full flex-shrink-0 ${
+                      application.status === 'approved'
+                        ? 'bg-green-50 text-green-700'
+                        : application.status === 'rejected'
+                          ? 'bg-red-50 text-red-700'
+                          : 'bg-amber-50 text-amber-700'
+                    }`}>
+                      {AUTHOR_STATUS_LABELS[application.status] ?? application.status}
+                    </span>
+                    <div className="min-w-0">
+                      <p className="text-sm text-gray-700">
+                        {application.employmentType === 'individual_entrepreneur'
+                          ? "\u0418\u041f"
+                          : "\u0421\u0430\u043c\u043e\u0437\u0430\u043d\u044f\u0442\u043e\u0441\u0442\u044c"}
+                      </p>
+                      <p className="text-xs text-gray-400">{formatDate(application.createdAt)}</p>
+                      {application.sampleUrl && (
+                        <a
+                          href={application.sampleUrl}
+                          target="_blank"
+                          rel="noreferrer"
+                          className="inline-block mt-1 text-xs font-medium text-blue-500 hover:text-blue-600"
+                        >
+                          {"\u041e\u0442\u043a\u0440\u044b\u0442\u044c \u043f\u0440\u0438\u043c\u0435\u0440 \u043c\u0430\u0442\u0435\u0440\u0438\u0430\u043b\u0430 \u2192"}
+                        </a>
+                      )}
+                    </div>
+                  </li>
+                ))}
+              </ul>
+            ) : (
+              <p className="text-sm text-gray-500">{"\u0412\u0430\u0448\u0438 \u0430\u0432\u0442\u043e\u0440\u0441\u043a\u0438\u0435 \u0437\u0430\u044f\u0432\u043a\u0438 \u043f\u043e\u044f\u0432\u044f\u0442\u0441\u044f \u0437\u0434\u0435\u0441\u044c \u043f\u043e\u0441\u043b\u0435 \u043e\u0442\u043f\u0440\u0430\u0432\u043a\u0438."}</p>
+            )}
+          </div>
+
           {/* Document requests */}
           <div className="bg-white rounded-2xl border border-gray-200 shadow-sm p-5 sm:col-span-2">
             <div className="flex items-center gap-3 mb-3">
@@ -977,11 +1046,11 @@ export function KabinetClient() {
                 <FileText className="w-5 h-5 text-blue-500" />
               </div>
               <p className="text-sm font-semibold text-gray-800">
-                Заявки на документы{docs && docs.total > 0 ? ` (${docs.total})` : ''}
+                Р—Р°СЏРІРєРё РЅР° РґРѕРєСѓРјРµРЅС‚С‹{docs && docs.total > 0 ? ` (${docs.total})` : ''}
               </p>
             </div>
             {summaryLoading ? (
-              <p className="text-sm text-gray-400">Загрузка...</p>
+              <p className="text-sm text-gray-400">Р—Р°РіСЂСѓР·РєР°...</p>
             ) : docs && docs.total > 0 ? (
               <ul className="space-y-2">
                 {docs.items.map(d => (
@@ -998,59 +1067,59 @@ export function KabinetClient() {
                 ))}
               </ul>
             ) : (
-              <p className="text-sm text-gray-500">Заявки на документы появятся здесь</p>
+              <p className="text-sm text-gray-500">Р—Р°СЏРІРєРё РЅР° РґРѕРєСѓРјРµРЅС‚С‹ РїРѕСЏРІСЏС‚СЃСЏ Р·РґРµСЃСЊ</p>
             )}
           </div>
         </div>
 
         {/* Navigation */}
         <div className="bg-white rounded-2xl border border-gray-200 shadow-sm p-5">
-          <p className="text-xs font-semibold text-gray-500 uppercase tracking-wide mb-3">Перейти к материалам</p>
+          <p className="text-xs font-semibold text-gray-500 uppercase tracking-wide mb-3">РџРµСЂРµР№С‚Рё Рє РјР°С‚РµСЂРёР°Р»Р°Рј</p>
           <div className="flex flex-wrap gap-2">
             <Link
               href="/materialy"
               className="inline-flex items-center gap-1.5 px-4 py-2 bg-blue-500 hover:bg-blue-600 text-white text-sm font-medium rounded-xl transition-colors"
             >
               <BookOpen className="w-4 h-4" />
-              Все материалы
+              Р’СЃРµ РјР°С‚РµСЂРёР°Р»С‹
             </Link>
             <Link
               href="/materialy/besplatno"
               className="inline-flex items-center gap-1.5 px-4 py-2 border border-gray-200 hover:border-gray-300 text-gray-700 text-sm font-medium rounded-xl transition-colors"
             >
-              Бесплатные
+              Р‘РµСЃРїР»Р°С‚РЅС‹Рµ
             </Link>
             <Link
               href="/materialy/podpiska"
               className="inline-flex items-center gap-1.5 px-4 py-2 border border-gray-200 hover:border-gray-300 text-gray-700 text-sm font-medium rounded-xl transition-colors"
             >
-              По подписке
+              РџРѕ РїРѕРґРїРёСЃРєРµ
             </Link>
             <Link
               href="/materialy/magazin"
               className="inline-flex items-center gap-1.5 px-4 py-2 border border-gray-200 hover:border-gray-300 text-gray-700 text-sm font-medium rounded-xl transition-colors"
             >
-              Магазин
+              РњР°РіР°Р·РёРЅ
             </Link>
           </div>
         </div>
 
-        {/* Admin block — visible only to admins */}
+        {/* Admin block вЂ” visible only to admins */}
         {summary?.user?.isAdmin && (
           <div className="bg-white rounded-2xl border border-amber-200 shadow-sm p-5">
-            <p className="text-xs font-semibold text-amber-600 uppercase tracking-wide mb-3">Администрирование</p>
+            <p className="text-xs font-semibold text-amber-600 uppercase tracking-wide mb-3">РђРґРјРёРЅРёСЃС‚СЂРёСЂРѕРІР°РЅРёРµ</p>
             <div className="flex flex-wrap gap-2">
               <Link
                 href="/admin"
                 className="inline-flex items-center gap-1.5 px-4 py-2 bg-amber-500 hover:bg-amber-600 text-white text-sm font-medium rounded-xl transition-colors"
               >
-                Панель администратора
+                РџР°РЅРµР»СЊ Р°РґРјРёРЅРёСЃС‚СЂР°С‚РѕСЂР°
               </Link>
               <Link
                 href="/admin/material-files"
                 className="inline-flex items-center gap-1.5 px-4 py-2 border border-amber-200 hover:border-amber-300 text-amber-700 text-sm font-medium rounded-xl transition-colors"
               >
-                Файлы материалов
+                Р¤Р°Р№Р»С‹ РјР°С‚РµСЂРёР°Р»РѕРІ
               </Link>
             </div>
           </div>
@@ -1060,3 +1129,5 @@ export function KabinetClient() {
     </div>
   );
 }
+
+

@@ -6,6 +6,7 @@ import {
   type CartQuoteItem,
   type CartQuoteInputItem,
 } from './cartQuote';
+import { getAppOrigin } from './appOrigin';
 import { claimReferralForOrder } from './referrals';
 import { buildProdamusPayformUrl, isProdamusConfigured } from './prodamus';
 
@@ -63,6 +64,18 @@ type PaymentStatusRow = {
   amount: number | string;
   paid_at: string | null;
   raw_payload: { payformUrl?: string } | null;
+};
+
+type PendingOrderCandidateRow = {
+  order_id: string;
+  order_total_amount: number | string;
+  order_discount_amount: number | string;
+  order_referral_discount: number | string;
+  order_coupon_code: string | null;
+  payment_id: string;
+  payment_amount: number | string;
+  payment_raw_payload: { payformUrl?: string; quote?: { totalRubles?: number } } | null;
+  material_ids: string[] | null;
 };
 
 export interface CreateOrderResult {
@@ -168,8 +181,83 @@ async function ensureNoPurchasedMaterials(
   }
 }
 
-function buildRedirectOrigin(requestOrigin: string): string {
-  return requestOrigin.replace(/\/+$/, '');
+function normalizeMaterialIds(materialIds: string[]): string {
+  return [...materialIds].sort().join('|');
+}
+
+async function lockCheckoutScope(client: PoolClient, scope: string): Promise<void> {
+  await client.query('SELECT pg_advisory_xact_lock(hashtext($1))', [scope]);
+}
+
+async function findReusablePendingOrder(params: {
+  client: PoolClient;
+  userId: string;
+  materialIds: string[];
+  quote: CartQuote;
+}): Promise<{ orderId: string; paymentId: string; paymentUrl: string | null; totalRubles: number } | null> {
+  const normalizedMaterialIds = normalizeMaterialIds(params.materialIds);
+  const referralCode = params.quote.referral.applied ? params.quote.referral.code : null;
+
+  const result = await params.client.query<PendingOrderCandidateRow>(
+    `
+      SELECT
+        o.id AS order_id,
+        o.total_amount AS order_total_amount,
+        o.discount_amount AS order_discount_amount,
+        o.referral_discount AS order_referral_discount,
+        o.coupon_code AS order_coupon_code,
+        p.id AS payment_id,
+        p.amount AS payment_amount,
+        p.raw_payload AS payment_raw_payload,
+        array_agg(oi.material_id::text ORDER BY oi.material_id::text) AS material_ids
+      FROM orders o
+      JOIN payments p ON p.order_id = o.id
+      JOIN order_items oi ON oi.order_id = o.id
+      WHERE o.user_id = $1
+        AND o.status = 'pending'
+        AND p.status = 'pending'
+        AND p.provider = 'prodamus'
+      GROUP BY
+        o.id,
+        o.total_amount,
+        o.discount_amount,
+        o.referral_discount,
+        o.coupon_code,
+        p.id,
+        p.amount,
+        p.raw_payload,
+        o.created_at,
+        p.created_at
+      ORDER BY GREATEST(o.created_at, p.created_at) DESC
+      LIMIT 10
+    `,
+    [params.userId]
+  );
+
+  for (const row of result.rows) {
+    const rowMaterialIds = normalizeMaterialIds(row.material_ids ?? []);
+    const sameItems = rowMaterialIds === normalizedMaterialIds;
+    const sameTotal = Number(row.payment_amount ?? 0) === rublesToKopecks(params.quote.totalRubles);
+    const sameReferral = (row.order_coupon_code ?? null) === (referralCode ?? null);
+
+    if (!sameItems || !sameTotal || !sameReferral) {
+      continue;
+    }
+
+    const paymentUrl =
+      typeof row.payment_raw_payload?.payformUrl === 'string' && row.payment_raw_payload.payformUrl.trim()
+        ? row.payment_raw_payload.payformUrl.trim()
+        : null;
+
+    return {
+      orderId: row.order_id,
+      paymentId: row.payment_id,
+      paymentUrl,
+      totalRubles: kopecksToRubles(Number(row.order_total_amount ?? 0)),
+    };
+  }
+
+  return null;
 }
 
 async function insertOrderItems(
@@ -272,7 +360,7 @@ function buildPaymentUrl(params: {
   customerPhone: string;
   requestOrigin: string;
 }): string {
-  const origin = buildRedirectOrigin(params.requestOrigin);
+  const origin = getAppOrigin(params.requestOrigin);
 
   return buildProdamusPayformUrl({
     order_id: params.orderId,
@@ -333,7 +421,28 @@ export async function createStoreOrderCheckout(params: {
       .filter((value): value is string => Boolean(value))
   );
 
-  const { order, payment } = await withTransaction(async (client) => {
+  const materialIds = availableItems
+    .map((item) => item.materialId)
+    .filter((value): value is string => Boolean(value));
+
+  const { order, payment, reused } = await withTransaction(async (client) => {
+    await lockCheckoutScope(client, `store-checkout:${params.userId}`);
+
+    const reusable = await findReusablePendingOrder({
+      client,
+      userId: params.userId,
+      materialIds,
+      quote,
+    });
+
+    if (reusable) {
+      return {
+        order: { id: reusable.orderId, total_amount: rublesToKopecks(reusable.totalRubles) } as CreatedOrderRow,
+        payment: { id: reusable.paymentId } as CreatedPaymentRow,
+        reused: reusable,
+      };
+    }
+
     const created = await createOrderRows(client, params.userId, quote, availableItems);
 
     if (quote.referral.applied && quote.referral.code) {
@@ -344,31 +453,34 @@ export async function createStoreOrderCheckout(params: {
       });
     }
 
-    return created;
+    return { ...created, reused: null };
   });
 
-  const paymentUrl = buildPaymentUrl({
-    orderId: order.id,
-    quote,
-    items: availableItems,
-    customerEmail: user.email,
-    customerPhone: user.phone,
-    requestOrigin: params.requestOrigin,
-  });
+  let paymentUrl = reused?.paymentUrl ?? null;
+  if (!paymentUrl) {
+    paymentUrl = buildPaymentUrl({
+      orderId: order.id,
+      quote,
+      items: availableItems,
+      customerEmail: user.email,
+      customerPhone: user.phone,
+      requestOrigin: params.requestOrigin,
+    });
 
-  await query(
-    `
-      UPDATE payments
-      SET raw_payload = jsonb_set(
-            COALESCE(raw_payload, '{}'::jsonb),
-            '{payformUrl}',
-            to_jsonb($2::text),
-            true
-          )
-      WHERE id = $1
-    `,
-    [payment.id, paymentUrl]
-  );
+    await query(
+      `
+        UPDATE payments
+        SET raw_payload = jsonb_set(
+              COALESCE(raw_payload, '{}'::jsonb),
+              '{payformUrl}',
+              to_jsonb($2::text),
+              true
+            )
+        WHERE id = $1
+      `,
+      [payment.id, paymentUrl]
+    );
+  }
 
   return {
     orderId: order.id,

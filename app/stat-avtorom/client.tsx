@@ -2,7 +2,8 @@
 
 import Link from 'next/link';
 import { useMemo, useState } from 'react';
-import { CheckCircle2, FileBadge2, Loader2, PenLine, ShieldCheck, Upload } from 'lucide-react';
+import { FileBadge2, Loader2, PenLine, ShieldCheck, Upload } from 'lucide-react';
+import { PublicFormConsent } from '../../src/components/PublicFormConsent';
 import { useAuthSession } from '../../src/hooks/useAuthSession';
 
 type AuthorFormState = {
@@ -15,6 +16,7 @@ type AuthorFormState = {
   bio: string;
   employmentType: string;
   sampleUrl: string;
+  consent: boolean;
 };
 
 const EMPLOYMENT_OPTIONS = [
@@ -41,6 +43,7 @@ export function StatAvtoromClient() {
     bio: '',
     employmentType: '',
     sampleUrl: '',
+    consent: false,
   });
   const [submitting, setSubmitting] = useState(false);
   const [successMessage, setSuccessMessage] = useState('');
@@ -78,6 +81,7 @@ export function StatAvtoromClient() {
           bio: form.bio,
           employmentType: form.employmentType,
           sampleUrl: form.sampleUrl,
+          consent: form.consent,
         }),
       });
 
@@ -97,6 +101,7 @@ export function StatAvtoromClient() {
         bio: '',
         employmentType: '',
         sampleUrl: '',
+        consent: false,
       });
     } catch (error) {
       setErrorMessage(
@@ -257,6 +262,12 @@ export function StatAvtoromClient() {
                 </div>
               </label>
 
+              <PublicFormConsent
+                checked={form.consent}
+                onChange={(checked) => updateField('consent', checked)}
+                accentClassName="text-green-600"
+              />
+
               {successMessage && (
                 <div className="rounded-xl border border-green-200 bg-green-50 px-4 py-3 text-sm text-green-800">
                   {successMessage}
@@ -277,7 +288,7 @@ export function StatAvtoromClient() {
               <div className="flex flex-col gap-3 sm:flex-row">
                 <button
                   type="submit"
-                  disabled={submitting || loading}
+                  disabled={submitting || loading || !form.consent}
                   className="inline-flex items-center justify-center gap-2 rounded-xl bg-green-600 px-5 py-3 text-sm font-semibold text-white transition-colors hover:bg-green-700 disabled:opacity-50"
                 >
                   {submitting ? <Loader2 className="h-4 w-4 animate-spin" /> : <FileBadge2 className="h-4 w-4" />}

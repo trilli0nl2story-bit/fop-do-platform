@@ -1,4 +1,4 @@
-import { NextResponse } from 'next/server';
+﻿import { NextResponse } from 'next/server';
 import { getCurrentUser } from '@/src/server/auth';
 import { query } from '@/src/server/db';
 import {
@@ -6,6 +6,7 @@ import {
   rateLimitResponse,
   requireTrustedOrigin,
 } from '@/src/server/security';
+import { buildConsentMeta, ensureConsentColumns } from '@/src/server/publicFormConsent';
 
 export const dynamic = 'force-dynamic';
 
@@ -19,6 +20,7 @@ type CreateAuthorApplicationBody = {
   bio?: string;
   employmentType?: string;
   sampleUrl?: string;
+  consent?: boolean;
 };
 
 function normalizeText(value: unknown, maxLength: number): string {
@@ -44,7 +46,7 @@ export async function POST(request: Request) {
     body = (await request.json()) as CreateAuthorApplicationBody;
   } catch {
     return NextResponse.json(
-      { error: 'invalid_json', message: 'Не удалось прочитать заявку. Обновите страницу и попробуйте ещё раз.' },
+      { error: 'invalid_json', message: 'РќРµ СѓРґР°Р»РѕСЃСЊ РїСЂРѕС‡РёС‚Р°С‚СЊ Р·Р°СЏРІРєСѓ. РћР±РЅРѕРІРёС‚Рµ СЃС‚СЂР°РЅРёС†Сѓ Рё РїРѕРїСЂРѕР±СѓР№С‚Рµ РµС‰С‘ СЂР°Р·.' },
       { status: 400 }
     );
   }
@@ -58,45 +60,53 @@ export async function POST(request: Request) {
   const bio = normalizeText(body.bio, 5000);
   const employmentType = normalizeText(body.employmentType, 60);
   const sampleUrl = normalizeText(body.sampleUrl, 1000);
+  const consentAccepted = body.consent === true;
 
   if (!name) {
     return NextResponse.json(
-      { error: 'missing_name', message: 'Укажите имя и фамилию.' },
+      { error: 'missing_name', message: 'РЈРєР°Р¶РёС‚Рµ РёРјСЏ Рё С„Р°РјРёР»РёСЋ.' },
       { status: 400 }
     );
   }
 
   if (!email || !isValidEmail(email)) {
     return NextResponse.json(
-      { error: 'invalid_email', message: 'Укажите корректный email.' },
+      { error: 'invalid_email', message: 'РЈРєР°Р¶РёС‚Рµ РєРѕСЂСЂРµРєС‚РЅС‹Р№ email.' },
       { status: 400 }
     );
   }
 
   if (!position) {
     return NextResponse.json(
-      { error: 'missing_position', message: 'Укажите должность или роль.' },
+      { error: 'missing_position', message: 'РЈРєР°Р¶РёС‚Рµ РґРѕР»Р¶РЅРѕСЃС‚СЊ РёР»Рё СЂРѕР»СЊ.' },
       { status: 400 }
     );
   }
 
   if (!bio) {
     return NextResponse.json(
-      { error: 'missing_bio', message: 'Расскажите немного о себе и о материалах, которые хотите публиковать.' },
+      { error: 'missing_bio', message: 'Р Р°СЃСЃРєР°Р¶РёС‚Рµ РЅРµРјРЅРѕРіРѕ Рѕ СЃРµР±Рµ Рё Рѕ РјР°С‚РµСЂРёР°Р»Р°С…, РєРѕС‚РѕСЂС‹Рµ С…РѕС‚РёС‚Рµ РїСѓР±Р»РёРєРѕРІР°С‚СЊ.' },
       { status: 400 }
     );
   }
 
   if (!['self_employed', 'individual_entrepreneur'].includes(employmentType)) {
     return NextResponse.json(
-      { error: 'invalid_employment_type', message: 'Выберите статус занятости.' },
+      { error: 'invalid_employment_type', message: 'Р’С‹Р±РµСЂРёС‚Рµ СЃС‚Р°С‚СѓСЃ Р·Р°РЅСЏС‚РѕСЃС‚Рё.' },
       { status: 400 }
     );
   }
 
   if (!isValidOptionalUrl(sampleUrl)) {
     return NextResponse.json(
-      { error: 'invalid_sample_url', message: 'Ссылка на пример материала должна начинаться с http://, https:// или /' },
+      { error: 'invalid_sample_url', message: 'РЎСЃС‹Р»РєР° РЅР° РїСЂРёРјРµСЂ РјР°С‚РµСЂРёР°Р»Р° РґРѕР»Р¶РЅР° РЅР°С‡РёРЅР°С‚СЊСЃСЏ СЃ http://, https:// РёР»Рё /' },
+      { status: 400 }
+    );
+  }
+
+  if (!consentAccepted) {
+    return NextResponse.json(
+      { error: 'missing_consent', message: 'Нужно подтвердить согласие на обработку персональных данных.' },
       { status: 400 }
     );
   }
@@ -110,11 +120,14 @@ export async function POST(request: Request) {
   if (!rateLimit.allowed) {
     return rateLimitResponse(
       rateLimit,
-      'Слишком много заявок за короткое время. Подождите немного и попробуйте снова.'
+      'РЎР»РёС€РєРѕРј РјРЅРѕРіРѕ Р·Р°СЏРІРѕРє Р·Р° РєРѕСЂРѕС‚РєРѕРµ РІСЂРµРјСЏ. РџРѕРґРѕР¶РґРёС‚Рµ РЅРµРјРЅРѕРіРѕ Рё РїРѕРїСЂРѕР±СѓР№С‚Рµ СЃРЅРѕРІР°.'
     );
   }
 
   try {
+    await ensureConsentColumns('author_applications');
+    const consentMeta = buildConsentMeta(request);
+
     const result = await query<{ id: string; status: string; created_at: string }>(
       `
         INSERT INTO author_applications (
@@ -129,10 +142,13 @@ export async function POST(request: Request) {
           status,
           employment_type,
           document_url,
+          consent_accepted_at,
+          consent_ip,
+          consent_user_agent,
           created_at,
           updated_at
         )
-        VALUES ($1, $2, $3, $4, $5, $6, $7, $8, 'pending', $9, $10, now(), now())
+        VALUES ($1, $2, $3, $4, $5, $6, $7, $8, 'pending', $9, $10, $11, $12, $13, now(), now())
         RETURNING id, status, created_at
       `,
       [
@@ -146,6 +162,9 @@ export async function POST(request: Request) {
         bio,
         employmentType,
         sampleUrl || null,
+        consentMeta.acceptedAt,
+        consentMeta.ip,
+        consentMeta.userAgent,
       ]
     );
 
@@ -159,13 +178,14 @@ export async function POST(request: Request) {
         status: row.status,
         createdAt: new Date(row.created_at).toISOString(),
       },
-      message: 'Заявка автора принята. Мы свяжемся с вами после рассмотрения.',
+      message: 'Р—Р°СЏРІРєР° Р°РІС‚РѕСЂР° РїСЂРёРЅСЏС‚Р°. РњС‹ СЃРІСЏР¶РµРјСЃСЏ СЃ РІР°РјРё РїРѕСЃР»Рµ СЂР°СЃСЃРјРѕС‚СЂРµРЅРёСЏ.',
     });
   } catch (error) {
     console.error('[api/author-applications]', error instanceof Error ? error.message : String(error));
     return NextResponse.json(
-      { error: 'internal_error', message: 'Не удалось отправить заявку автора. Попробуйте ещё раз.' },
+      { error: 'internal_error', message: 'РќРµ СѓРґР°Р»РѕСЃСЊ РѕС‚РїСЂР°РІРёС‚СЊ Р·Р°СЏРІРєСѓ Р°РІС‚РѕСЂР°. РџРѕРїСЂРѕР±СѓР№С‚Рµ РµС‰С‘ СЂР°Р·.' },
       { status: 500 }
     );
   }
 }
+
