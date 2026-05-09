@@ -7,7 +7,7 @@ import {
 import { Button } from '../../components/Button';
 import { StoreProduct } from '../../data/storeProducts';
 import { dbMaterialToStoreProduct } from '../../lib/dbStoreProducts';
-import { getPreviewPresentation, type PreviewPresentation } from '../../lib/materialMediaLinks';
+import { getDisplayCoverUrl, getPreviewPresentation, type PreviewPresentation } from '../../lib/materialMediaLinks';
 import { useCart } from '../../context/CartContext';
 import { InlineActivityHint } from '../../components/InlineActivityHint';
 import { randomDownloadCount } from '../../data/notifications';
@@ -28,7 +28,19 @@ const fileTypeColors: Record<string, string> = {
   PPTX: 'bg-orange-50 text-orange-600 border-orange-100',
 };
 
-function ProductPreviewImage({ src }: { src?: string }) {
+function ProductMediaImage({
+  src,
+  className,
+  fallbackLabel = 'Обложка и предпросмотр',
+  fallbackText = 'Посмотрите часть документа перед покупкой',
+  fallbackClassName,
+}: {
+  src?: string;
+  className?: string;
+  fallbackLabel?: string;
+  fallbackText?: string;
+  fallbackClassName?: string;
+}) {
   const [failed, setFailed] = useState(false);
 
   useEffect(() => {
@@ -37,25 +49,23 @@ function ProductPreviewImage({ src }: { src?: string }) {
 
   if (!src || failed) {
     return (
-      <>
+      <div className={fallbackClassName ?? 'flex h-full min-h-[180px] w-full flex-col items-center justify-center p-6 text-center'}>
         <div className="w-12 h-12 bg-gray-200 rounded-2xl flex items-center justify-center mb-3">
           <ImageIcon className="w-6 h-6 text-gray-400" />
         </div>
-        <p className="text-sm font-medium text-gray-500 mb-1">Обложка и предпросмотр</p>
-        <p className="text-xs text-gray-400 max-w-xs">Посмотрите часть документа перед покупкой</p>
-      </>
+        <p className="text-sm font-medium text-gray-500 mb-1">{fallbackLabel}</p>
+        <p className="text-xs text-gray-400 max-w-xs">{fallbackText}</p>
+      </div>
     );
   }
 
   return (
-    <div className="min-h-0 w-full flex-1 overflow-hidden rounded-lg bg-white/60">
-      <img
-        src={src}
-        alt=""
-        className="h-full w-full object-contain"
-        onError={() => setFailed(true)}
-      />
-    </div>
+    <img
+      src={src}
+      alt=""
+      className={className ?? 'h-full w-full object-contain'}
+      onError={() => setFailed(true)}
+    />
   );
 }
 
@@ -77,7 +87,12 @@ function ProductPreviewMedia({ presentation }: { presentation: PreviewPresentati
   if (presentation.kind === 'image') {
     return (
       <div className="overflow-hidden rounded-xl border border-gray-200 bg-gray-50">
-        <img src={presentation.src} alt="" className="max-h-[70vh] w-full object-contain" />
+        <ProductMediaImage
+          src={presentation.src}
+          className="max-h-[70vh] w-full object-contain"
+          fallbackLabel="Предпросмотр не загрузился"
+          fallbackText="Откройте предпросмотр отдельной кнопкой или попробуйте позже."
+        />
       </div>
     );
   }
@@ -99,6 +114,133 @@ function ProductPreviewMedia({ presentation }: { presentation: PreviewPresentati
   }
 
   return null;
+}
+
+type ProductMediaItem =
+  | { key: string; label: string; description: string; kind: 'preview'; presentation: PreviewPresentation }
+  | { key: string; label: string; description: string; kind: 'cover'; src: string };
+
+function getProductCoverUrl(product: StoreProduct): string {
+  return getDisplayCoverUrl(product.coverUrl ?? '');
+}
+
+function buildProductMediaItems(product: StoreProduct): ProductMediaItem[] {
+  const presentation = getPreviewPresentation(product.previewFileUrl ?? '');
+  const coverUrl = getProductCoverUrl(product);
+  const items: ProductMediaItem[] = [];
+
+  if (presentation.kind !== 'none') {
+    items.push({
+      key: `preview:${presentation.kind}:${presentation.kind === 'link' ? presentation.href : presentation.src}`,
+      label: presentation.kind === 'embed' ? 'Видео' : 'Предпросмотр',
+      description: presentation.kind === 'embed' ? 'Можно посмотреть прямо на сайте' : 'Фрагмент материала перед покупкой',
+      kind: 'preview',
+      presentation,
+    });
+  }
+
+  if (coverUrl) {
+    const previewImageSrc = presentation.kind === 'image' ? presentation.src : '';
+    if (coverUrl !== previewImageSrc) {
+      items.push({
+        key: `cover:${coverUrl}`,
+        label: 'Обложка',
+        description: 'Внешний вид материала',
+        kind: 'cover',
+        src: coverUrl,
+      });
+    }
+  }
+
+  return items;
+}
+
+function ProductMediaFrame({ item }: { item: ProductMediaItem }) {
+  if (item.kind === 'preview') {
+    return <ProductPreviewMedia presentation={item.presentation} />;
+  }
+
+  return (
+    <div className="aspect-video overflow-hidden rounded-xl border border-gray-200 bg-gray-50">
+      <ProductMediaImage
+        src={item.src}
+        className="h-full w-full object-contain"
+        fallbackLabel="Обложка не загрузилась"
+        fallbackText="Файл обложки недоступен, но предпросмотр и покупка работают."
+      />
+    </div>
+  );
+}
+
+function ProductMediaGallery({
+  product,
+  onOpenPreview,
+}: {
+  product: StoreProduct;
+  onOpenPreview: () => void;
+}) {
+  const items = buildProductMediaItems(product);
+  const [activeIndex, setActiveIndex] = useState(0);
+  const itemKey = items.map(item => item.key).join('|');
+
+  useEffect(() => {
+    setActiveIndex(0);
+  }, [itemKey]);
+
+  if (items.length === 0) {
+    return (
+      <div className="bg-gray-50 border-2 border-dashed border-gray-200 rounded-xl aspect-video flex flex-col items-center justify-center text-center p-8 overflow-hidden">
+        <ProductMediaImage src="" />
+        <button onClick={onOpenPreview} className="mt-3 inline-flex items-center gap-2 text-xs font-medium text-blue-600 hover:text-blue-700 transition-colors">
+          <Eye className="w-3.5 h-3.5" />Открыть предпросмотр
+        </button>
+      </div>
+    );
+  }
+
+  const activeItem = items[Math.min(activeIndex, items.length - 1)];
+
+  return (
+    <div className="overflow-hidden rounded-xl border border-gray-200 bg-white shadow-sm">
+      <div className="bg-gray-50 p-2">
+        <ProductMediaFrame item={activeItem} />
+      </div>
+
+      <div className="border-t border-gray-100 p-3">
+        {items.length > 1 && (
+          <div className="mb-3 flex flex-wrap gap-2">
+            {items.map((item, index) => {
+              const active = index === activeIndex;
+              return (
+                <button
+                  key={item.key}
+                  type="button"
+                  onClick={() => setActiveIndex(index)}
+                  className={`rounded-lg border px-3 py-1.5 text-xs font-semibold transition-colors ${
+                    active
+                      ? 'border-blue-200 bg-blue-50 text-blue-700'
+                      : 'border-gray-200 bg-white text-gray-600 hover:border-gray-300'
+                  }`}
+                >
+                  {item.label}
+                </button>
+              );
+            })}
+          </div>
+        )}
+
+        <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+          <div>
+            <p className="text-sm font-semibold text-gray-800">Обложка и предпросмотр</p>
+            <p className="mt-0.5 text-xs text-gray-500">{activeItem.description}</p>
+          </div>
+          <button onClick={onOpenPreview} className="inline-flex items-center gap-2 text-xs font-medium text-blue-600 hover:text-blue-700 transition-colors">
+            <Eye className="w-3.5 h-3.5" />Открыть предпросмотр
+          </button>
+        </div>
+      </div>
+    </div>
+  );
 }
 
 function getForWhom(product: StoreProduct): string[] {
@@ -127,6 +269,7 @@ function getWhatYouGet(product: StoreProduct): string[] {
 function PreviewModal({ product, onClose }: { product: StoreProduct; onClose: () => void }) {
   const presentation = getPreviewPresentation(product.previewFileUrl ?? '');
   const hasPreviewMedia = presentation.kind !== 'none';
+  const coverUrl = getProductCoverUrl(product);
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/50 backdrop-blur-sm">
@@ -142,8 +285,13 @@ function PreviewModal({ product, onClose }: { product: StoreProduct; onClose: ()
             <ProductPreviewMedia presentation={presentation} />
           ) : (
             <div className="bg-gray-50 border-2 border-dashed border-gray-200 rounded-xl aspect-[3/4] max-h-64 flex flex-col items-center justify-center text-center p-6">
-              {product.coverUrl ? (
-                <img src={product.coverUrl} alt="" className="max-h-full max-w-full object-contain" />
+              {coverUrl ? (
+                <ProductMediaImage
+                  src={coverUrl}
+                  className="max-h-full max-w-full object-contain"
+                  fallbackLabel="Обложка не загрузилась"
+                  fallbackText="Файл обложки недоступен, но материал можно посмотреть и купить."
+                />
               ) : (
                 <>
                   <div className="w-12 h-12 bg-gray-200 rounded-xl flex items-center justify-center mb-3">
@@ -175,10 +323,16 @@ function PreviewModal({ product, onClose }: { product: StoreProduct; onClose: ()
             </div>
           )}
 
-          {product.coverUrl && hasPreviewMedia && (
+          {coverUrl && hasPreviewMedia && (
             <div className="grid sm:grid-cols-[120px_1fr] gap-3 rounded-xl border border-gray-100 bg-gray-50 p-3">
               <div className="aspect-[4/3] overflow-hidden rounded-lg bg-white border border-gray-100">
-                <img src={product.coverUrl} alt="" className="h-full w-full object-contain" />
+                <ProductMediaImage
+                  src={coverUrl}
+                  className="h-full w-full object-contain"
+                  fallbackClassName="flex h-full w-full flex-col items-center justify-center p-2 text-center"
+                  fallbackLabel="Обложка не загрузилась"
+                  fallbackText="Можно продолжить просмотр видео."
+                />
               </div>
               <div className="min-w-0 self-center">
                 <p className="text-sm font-semibold text-gray-900 line-clamp-2">{product.title}</p>
@@ -497,6 +651,8 @@ export function StoreProductDetail({
                 </button>
               )}
 
+              <ProductMediaGallery product={product} onOpenPreview={() => setShowPreview(true)} />
+
               {/* Social proof line */}
               <div className="flex items-center gap-2 px-3 py-2 bg-green-50 border border-green-200 rounded-lg">
                 <span className="w-2 h-2 rounded-full bg-green-500 flex-shrink-0 animate-pulse" />
@@ -683,12 +839,7 @@ export function StoreProductDetail({
                 </div>
               )}
 
-              <div className="bg-gray-50 border-2 border-dashed border-gray-200 rounded-xl aspect-video flex flex-col items-center justify-center text-center p-8 overflow-hidden">
-                <ProductPreviewImage src={product.coverUrl} />
-                <button onClick={() => setShowPreview(true)} className="mt-3 inline-flex items-center gap-2 text-xs font-medium text-blue-600 hover:text-blue-700 transition-colors">
-                  <Eye className="w-3.5 h-3.5" />Открыть предпросмотр
-                </button>
-              </div>
+              <ProductMediaGallery product={product} onOpenPreview={() => setShowPreview(true)} />
 
               <div className="border border-gray-200 rounded-xl p-4">
                 <p className="text-sm font-semibold text-gray-700 mb-2">После покупки у вас будет:</p>

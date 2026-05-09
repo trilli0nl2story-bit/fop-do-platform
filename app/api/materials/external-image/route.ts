@@ -26,6 +26,24 @@ function extractPreviewUrl(html: string): string | null {
   return null;
 }
 
+async function resolveYandexDiskDownloadUrl(source: string): Promise<string | null> {
+  const apiUrl = new URL('https://cloud-api.yandex.net/v1/disk/public/resources/download');
+  apiUrl.searchParams.set('public_key', source);
+
+  const response = await fetch(apiUrl, {
+    headers: {
+      Accept: 'application/json',
+      'User-Agent': 'Mozilla/5.0 (compatible; metodcab-bot/1.0)',
+    },
+    cache: 'no-store',
+  });
+
+  if (!response.ok) return null;
+
+  const data = await response.json().catch(() => null) as { href?: unknown } | null;
+  return typeof data?.href === 'string' && data.href.trim() ? data.href.trim() : null;
+}
+
 export async function GET(request: Request) {
   const source = new URL(request.url).searchParams.get('source')?.trim() ?? '';
   if (!source || !isYandexDiskPublicAssetUrl(source)) {
@@ -33,6 +51,13 @@ export async function GET(request: Request) {
   }
 
   try {
+    const directDownloadUrl = await resolveYandexDiskDownloadUrl(source);
+    if (directDownloadUrl) {
+      const response = NextResponse.redirect(directDownloadUrl, 307);
+      response.headers.set('Cache-Control', 'public, max-age=300, s-maxage=300');
+      return response;
+    }
+
     const upstream = await fetch(source, {
       headers: {
         'User-Agent': 'Mozilla/5.0 (compatible; metodcab-bot/1.0)',
