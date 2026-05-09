@@ -268,7 +268,7 @@ function SubscriptionUpsell({
         onClick={onSubscribe}
         className="w-full flex items-center justify-center gap-1.5 text-sm font-semibold text-white bg-amber-500 hover:bg-amber-600 active:bg-amber-700 rounded-xl py-2.5 px-3 transition-colors"
       >
-        <Zap className="w-3.5 h-3.5" />Оформить подписку через Prodamus
+        <Zap className="w-3.5 h-3.5" />Оформить подписку
       </button>
     </div>
   );

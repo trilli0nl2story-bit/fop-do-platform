@@ -141,7 +141,7 @@ export function Register({ onNavigate, onRegister, downloadContext }: RegisterPr
             </div>
 
             <div>
-              <label className="block text-xs font-semibold text-gray-600 mb-1.5">Должность *</label>
+              <label className="block text-xs font-semibold text-gray-600 mb-1.5">Должность (выберите) *</label>
               <div className="flex flex-wrap gap-2">
                 {ROLES.map(role => (
                   <button
