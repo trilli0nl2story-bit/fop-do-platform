@@ -7,6 +7,7 @@ import {
 import { Button } from '../../components/Button';
 import { StoreProduct } from '../../data/storeProducts';
 import { dbMaterialToStoreProduct } from '../../lib/dbStoreProducts';
+import { getPreviewPresentation, type PreviewPresentation } from '../../lib/materialMediaLinks';
 import { useCart } from '../../context/CartContext';
 import { InlineActivityHint } from '../../components/InlineActivityHint';
 import { randomDownloadCount } from '../../data/notifications';
@@ -30,6 +31,10 @@ const fileTypeColors: Record<string, string> = {
 function ProductPreviewImage({ src }: { src?: string }) {
   const [failed, setFailed] = useState(false);
 
+  useEffect(() => {
+    setFailed(false);
+  }, [src]);
+
   if (!src || failed) {
     return (
       <>
@@ -43,13 +48,57 @@ function ProductPreviewImage({ src }: { src?: string }) {
   }
 
   return (
-    <img
-      src={src}
-      alt=""
-      className="w-full h-full object-contain"
-      onError={() => setFailed(true)}
-    />
+    <div className="min-h-0 w-full flex-1 overflow-hidden rounded-lg bg-white/60">
+      <img
+        src={src}
+        alt=""
+        className="h-full w-full object-contain"
+        onError={() => setFailed(true)}
+      />
+    </div>
   );
+}
+
+function ProductPreviewMedia({ presentation }: { presentation: PreviewPresentation }) {
+  if (presentation.kind === 'embed') {
+    return (
+      <div className="overflow-hidden rounded-xl border border-gray-200 bg-black">
+        <iframe
+          src={presentation.src}
+          title="Предпросмотр материала"
+          className="aspect-video w-full"
+          allow="autoplay; encrypted-media; picture-in-picture; fullscreen"
+          allowFullScreen
+        />
+      </div>
+    );
+  }
+
+  if (presentation.kind === 'image') {
+    return (
+      <div className="overflow-hidden rounded-xl border border-gray-200 bg-gray-50">
+        <img src={presentation.src} alt="" className="max-h-[70vh] w-full object-contain" />
+      </div>
+    );
+  }
+
+  if (presentation.kind === 'link') {
+    return (
+      <div className="rounded-xl border border-blue-100 bg-blue-50 p-4 text-sm text-gray-700">
+        <p className="font-semibold text-gray-900">Предпросмотр доступен по ссылке</p>
+        <a
+          href={presentation.href}
+          target="_blank"
+          rel="noreferrer"
+          className="mt-2 inline-flex font-semibold text-blue-600 hover:text-blue-700"
+        >
+          Открыть предпросмотр
+        </a>
+      </div>
+    );
+  }
+
+  return null;
 }
 
 function getForWhom(product: StoreProduct): string[] {
@@ -75,34 +124,69 @@ function getWhatYouGet(product: StoreProduct): string[] {
   return ['готовый документ', 'можно использовать сразу', 'без доработки'];
 }
 
-function PreviewModal({ title, onClose }: { title: string; onClose: () => void }) {
+function PreviewModal({ product, onClose }: { product: StoreProduct; onClose: () => void }) {
+  const presentation = getPreviewPresentation(product.previewFileUrl ?? '');
+  const hasPreviewMedia = presentation.kind !== 'none';
+
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/50 backdrop-blur-sm">
       <div className="bg-white rounded-2xl shadow-2xl w-full max-w-2xl max-h-[90vh] overflow-y-auto">
         <div className="flex items-center justify-between p-5 border-b border-gray-100">
-          <h3 className="text-base font-semibold text-gray-900 line-clamp-1">{title} — Предпросмотр</h3>
+          <h3 className="text-base font-semibold text-gray-900 line-clamp-1">{product.title} — Предпросмотр</h3>
           <button onClick={onClose} className="w-8 h-8 rounded-lg flex items-center justify-center text-gray-400 hover:text-gray-600 hover:bg-gray-100 transition-colors">
             <X className="w-4 h-4" />
           </button>
         </div>
         <div className="p-6 space-y-5">
-          <div className="bg-gray-50 border-2 border-dashed border-gray-200 rounded-xl aspect-[3/4] max-h-64 flex flex-col items-center justify-center text-center p-6">
-            <div className="w-12 h-12 bg-gray-200 rounded-xl flex items-center justify-center mb-3">
-              <ImageIcon className="w-6 h-6 text-gray-400" />
+          {hasPreviewMedia ? (
+            <ProductPreviewMedia presentation={presentation} />
+          ) : (
+            <div className="bg-gray-50 border-2 border-dashed border-gray-200 rounded-xl aspect-[3/4] max-h-64 flex flex-col items-center justify-center text-center p-6">
+              {product.coverUrl ? (
+                <img src={product.coverUrl} alt="" className="max-h-full max-w-full object-contain" />
+              ) : (
+                <>
+                  <div className="w-12 h-12 bg-gray-200 rounded-xl flex items-center justify-center mb-3">
+                    <ImageIcon className="w-6 h-6 text-gray-400" />
+                  </div>
+                  <p className="text-sm font-medium text-gray-500">Обложка документа</p>
+                  <p className="text-xs text-gray-400 mt-1">Здесь будет отображаться обложка материала</p>
+                </>
+              )}
             </div>
-            <p className="text-sm font-medium text-gray-500">Обложка документа</p>
-            <p className="text-xs text-gray-400 mt-1">Здесь будет отображаться обложка материала</p>
-          </div>
-          <div className="grid grid-cols-3 gap-3">
-            {[1, 2, 3].map(i => (
-              <div key={i} className="bg-gray-50 border border-gray-200 rounded-lg aspect-[3/4] flex flex-col items-center justify-center text-center p-3">
-                <div className="w-8 h-8 bg-gray-200 rounded-lg flex items-center justify-center mb-2">
-                  <FileText className="w-4 h-4 text-gray-400" />
+          )}
+
+          {product.previewText && (
+            <div className="rounded-xl border border-gray-100 bg-gray-50 p-4">
+              <p className="text-sm text-gray-700 leading-relaxed">{product.previewText}</p>
+            </div>
+          )}
+
+          {!hasPreviewMedia && (
+            <div className="grid grid-cols-3 gap-3">
+              {[1, 2, 3].map(i => (
+                <div key={i} className="bg-gray-50 border border-gray-200 rounded-lg aspect-[3/4] flex flex-col items-center justify-center text-center p-3">
+                  <div className="w-8 h-8 bg-gray-200 rounded-lg flex items-center justify-center mb-2">
+                    <FileText className="w-4 h-4 text-gray-400" />
+                  </div>
+                  <p className="text-xs text-gray-400">Страница {i}</p>
                 </div>
-                <p className="text-xs text-gray-400">Страница {i}</p>
+              ))}
+            </div>
+          )}
+
+          {product.coverUrl && hasPreviewMedia && (
+            <div className="grid sm:grid-cols-[120px_1fr] gap-3 rounded-xl border border-gray-100 bg-gray-50 p-3">
+              <div className="aspect-[4/3] overflow-hidden rounded-lg bg-white border border-gray-100">
+                <img src={product.coverUrl} alt="" className="h-full w-full object-contain" />
               </div>
-            ))}
-          </div>
+              <div className="min-w-0 self-center">
+                <p className="text-sm font-semibold text-gray-900 line-clamp-2">{product.title}</p>
+                <p className="text-xs text-gray-500 mt-1">Обложка материала</p>
+              </div>
+            </div>
+          )}
+
           <div className="bg-amber-50 border border-amber-200 rounded-xl p-4 flex items-start gap-3">
             <div className="w-8 h-8 bg-amber-100 rounded-lg flex items-center justify-center flex-shrink-0 mt-0.5">
               <Lock className="w-4 h-4 text-amber-600" />
@@ -140,6 +224,56 @@ function Accordion({ title, icon, children }: { title: string; icon: React.React
   );
 }
 
+function SubscriptionUpsell({
+  price,
+  discountedPrice,
+  saving,
+  onSubscribe,
+}: {
+  price: number;
+  discountedPrice: number;
+  saving: number;
+  onSubscribe: () => void;
+}) {
+  return (
+    <div className="bg-amber-50 border border-amber-200 rounded-xl p-3.5 space-y-2.5">
+      <div className="flex items-start gap-2.5">
+        <div className="w-7 h-7 bg-amber-100 rounded-lg flex items-center justify-center flex-shrink-0 mt-0.5">
+          <Star className="w-3.5 h-3.5 text-amber-600" />
+        </div>
+        <div className="flex-1 min-w-0">
+          <p className="text-sm font-bold text-gray-900 leading-snug">Подписка выгоднее при нескольких покупках</p>
+          <p className="text-xs text-gray-600 mt-0.5">Библиотека материалов + AI-помощник + скидка 25% на магазин</p>
+        </div>
+      </div>
+      <div className="bg-amber-100 rounded-lg px-3 py-2 space-y-1">
+        <div className="flex items-center justify-between gap-3 text-xs">
+          <span className="text-gray-600">1 материал отдельно:</span>
+          <span className="font-medium text-gray-700">{price.toLocaleString('ru-RU')} ₽</span>
+        </div>
+        <div className="flex items-center justify-between gap-3 text-xs">
+          <span className="text-gray-600">С подпиской:</span>
+          <span className="font-semibold text-amber-900">{discountedPrice.toLocaleString('ru-RU')} ₽ за материал</span>
+        </div>
+        <div className="flex items-center justify-between gap-3 text-xs border-t border-amber-200 pt-1 mt-0.5">
+          <span className="text-green-700 font-medium">Экономия:</span>
+          <span className="font-bold text-green-700">{saving.toLocaleString('ru-RU')} ₽</span>
+        </div>
+        <div className="flex items-center justify-between gap-3 text-xs border-t border-amber-200 pt-1 mt-0.5">
+          <span className="text-gray-600">Подписка:</span>
+          <span className="font-bold text-amber-900">278 ₽/месяц</span>
+        </div>
+      </div>
+      <button
+        onClick={onSubscribe}
+        className="w-full flex items-center justify-center gap-1.5 text-sm font-semibold text-white bg-amber-500 hover:bg-amber-600 active:bg-amber-700 rounded-xl py-2.5 px-3 transition-colors"
+      >
+        <Zap className="w-3.5 h-3.5" />Оформить подписку через Prodamus
+      </button>
+    </div>
+  );
+}
+
 export function StoreProductDetail({
   slug,
   onNavigate,
@@ -158,18 +292,21 @@ export function StoreProductDetail({
   const relatedProducts: Array<{ type: 'next_month' | 'previous_month' | 'same_age_related'; product: StoreProduct }> = [];
 
   useEffect(() => {
-    if (initialProduct) return;
     let cancelled = false;
-    setDbProductLoading(true);
+    setDbProductLoading(!initialProduct);
 
     fetch(`/api/materials/store/${encodeURIComponent(slug)}`)
       .then(res => (res.ok ? res.json() : null))
       .then(data => {
         if (cancelled) return;
-        setDbProduct(data?.material ? dbMaterialToStoreProduct(data.material) : null);
+        if (data?.material) {
+          setDbProduct(dbMaterialToStoreProduct(data.material));
+        } else if (!initialProduct) {
+          setDbProduct(null);
+        }
       })
       .catch(() => {
-        if (!cancelled) setDbProduct(null);
+        if (!cancelled && !initialProduct) setDbProduct(null);
       })
       .finally(() => {
         if (!cancelled) setDbProductLoading(false);
@@ -279,7 +416,7 @@ export function StoreProductDetail({
 
   return (
     <>
-      {showPreview && <PreviewModal title={product.title} onClose={() => setShowPreview(false)} />}
+      {showPreview && <PreviewModal product={product} onClose={() => setShowPreview(false)} />}
 
       <div className="max-w-4xl mx-auto px-4 sm:px-6 lg:px-8 py-6">
         <button
@@ -369,43 +506,12 @@ export function StoreProductDetail({
               </div>
 
               {/* Subscription block */}
-              {
-                <div className="bg-amber-50 border border-amber-200 rounded-xl p-3 space-y-2">
-                  <div className="flex items-start gap-2.5">
-                    <div className="w-7 h-7 bg-amber-100 rounded-lg flex items-center justify-center flex-shrink-0 mt-0.5">
-                      <Star className="w-3.5 h-3.5 text-amber-600" />
-                    </div>
-                    <div className="flex-1 min-w-0">
-                      <p className="text-sm font-bold text-gray-900 leading-snug">???????????? ???????????????????? ???? ????????????????</p>
-                      <p className="text-xs text-gray-600 mt-0.5">???????????????????? + ???????????????? + ???????????? 25% ???? ?????????????? ?? ????????????????</p>
-                    </div>
-                  </div>
-                  <div className="bg-amber-100 rounded-lg px-2.5 py-2 space-y-1">
-                    <div className="flex items-center justify-between text-xs">
-                      <span className="text-gray-600">1 ???????????????? ????????????:</span>
-                      <span className="font-medium text-gray-700">{product.price.toLocaleString('ru-RU')} ???</span>
-                    </div>
-                    <div className="flex items-center justify-between text-xs">
-                      <span className="text-gray-600">?? ??????????????????:</span>
-                      <span className="font-semibold text-amber-900">{discountedPrice.toLocaleString('ru-RU')} ??? ???? ????????????????</span>
-                    </div>
-                    <div className="flex items-center justify-between text-xs border-t border-amber-200 pt-1 mt-0.5">
-                      <span className="text-green-700 font-medium">????????????????:</span>
-                      <span className="font-bold text-green-700">{saving.toLocaleString('ru-RU')} ???</span>
-                    </div>
-                  </div>
-                  <div className="flex items-center justify-between text-xs text-gray-500 px-0.5">
-                    <span className="text-gray-500">????????????????:</span>
-                    <span className="font-bold text-amber-800">278 ???/??????</span>
-                  </div>
-                  <button
-                    onClick={() => onNavigate('subscription')}
-                    className="w-full flex items-center justify-center gap-1.5 text-sm font-semibold text-white bg-amber-500 hover:bg-amber-600 rounded-lg px-3 py-2 transition-colors"
-                  >
-                    <Zap className="w-3.5 h-3.5" />???????????????? ???????????????? ?????????? Prodamus
-                  </button>
-                </div>
-              }
+              <SubscriptionUpsell
+                price={product.price}
+                discountedPrice={discountedPrice}
+                saving={saving}
+                onSubscribe={() => onNavigate('subscription')}
+              />
 
               {/* ── EXPANDABLE DETAILS SECTION ── */}
               <div className="border border-gray-200 rounded-xl overflow-hidden">
@@ -697,43 +803,12 @@ export function StoreProductDetail({
               </div>
 
               <div className="px-4 pb-4">
-                {
-                  <div className="bg-amber-50 border border-amber-200 rounded-xl p-3.5 space-y-2.5">
-                    <div className="flex items-start gap-2.5">
-                      <div className="w-7 h-7 bg-amber-100 rounded-lg flex items-center justify-center flex-shrink-0 mt-0.5">
-                        <Star className="w-3.5 h-3.5 text-amber-600" />
-                      </div>
-                      <div>
-                        <p className="text-sm font-bold text-gray-900 leading-snug">???????????? ???????????????????? ???? ????????????????</p>
-                        <p className="text-xs text-gray-600 mt-0.5">???????????????????? + ???????????????? + ???????????? 25% ???? ?????????????? ?? ????????????????</p>
-                      </div>
-                    </div>
-                    <div className="bg-amber-100 rounded-lg px-3 py-2 space-y-1">
-                      <div className="flex items-center justify-between text-xs">
-                        <span className="text-gray-600">1 ???????????????? ????????????:</span>
-                        <span className="font-medium text-gray-700">{product.price.toLocaleString('ru-RU')} ???</span>
-                      </div>
-                      <div className="flex items-center justify-between text-xs">
-                        <span className="text-gray-600">?? ??????????????????:</span>
-                        <span className="font-semibold text-amber-900">{discountedPrice.toLocaleString('ru-RU')} ??? ???? ????????????????</span>
-                      </div>
-                      <div className="flex items-center justify-between text-xs border-t border-amber-200 pt-1 mt-0.5">
-                        <span className="text-green-700 font-medium">????????????????:</span>
-                        <span className="font-bold text-green-700">{saving.toLocaleString('ru-RU')} ???</span>
-                      </div>
-                      <div className="flex items-center justify-between text-xs border-t border-amber-200 pt-1 mt-0.5">
-                        <span className="text-gray-600">????????????????:</span>
-                        <span className="font-bold text-amber-900">278 ???/??????</span>
-                      </div>
-                    </div>
-                    <button
-                      onClick={() => onNavigate('subscription')}
-                      className="w-full flex items-center justify-center gap-1.5 text-sm font-semibold text-white bg-amber-500 hover:bg-amber-600 active:bg-amber-700 rounded-xl py-2.5 px-3 transition-colors"
-                    >
-                      <Zap className="w-3.5 h-3.5" />???????????????? ???????????????? ?????????? Prodamus
-                    </button>
-                  </div>
-                }
+                <SubscriptionUpsell
+                  price={product.price}
+                  discountedPrice={discountedPrice}
+                  saving={saving}
+                  onSubscribe={() => onNavigate('subscription')}
+                />
               </div>
 
               <div className="px-4 pb-4 space-y-1.5 border-t border-gray-100 pt-3">
