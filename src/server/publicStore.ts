@@ -1,4 +1,5 @@
 import { query } from '@/src/server/db';
+import { getDisplayCoverUrl, getDisplayPreviewUrl } from '@/src/lib/materialMediaLinks';
 
 export type PublicStoreMaterial = {
   id: string;
@@ -53,9 +54,9 @@ function mapPublicStoreMaterial(row: StoreMaterialRow): PublicStoreMaterial {
     priceRubles: Math.round(Number(row.price ?? 0)) / 100,
     fileType: row.file_type,
     program: row.program || 'Универсальный',
-    coverUrl: row.cover_url || '',
+    coverUrl: getDisplayCoverUrl(row.cover_url || ''),
     previewText: row.preview_text || '',
-    previewFileUrl: row.preview_file_url || '',
+    previewFileUrl: getDisplayPreviewUrl(row.preview_file_url || ''),
     seoTitle: row.seo_title || '',
     seoDescription: row.seo_description || '',
     updatedAt: row.updated_at,

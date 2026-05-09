@@ -23,7 +23,7 @@ function toForm(category?: CategoryRow): CategoryForm {
   return {
     name: category?.name ?? '',
     description: category?.description ?? '',
-    sortOrder: String(category?.sortOrder ?? 0),
+    sortOrder: String(category?.sortOrder ?? 1),
     isVisible: category?.isVisible ?? true,
   };
 }
@@ -39,17 +39,25 @@ export function CategoryManager() {
 
   const selectedCategory = categories.find(category => category.id === selectedId) ?? null;
 
-  async function loadCategories() {
+  async function loadCategories(preferredSelectedId?: string) {
     setLoading(true);
     setError('');
     try {
       const res = await fetch('/api/admin/categories', { credentials: 'include' });
       const data = await res.json();
       if (!res.ok) throw new Error(data.error ?? 'Не удалось загрузить разделы');
-      setCategories(data.categories ?? []);
-      if (!selectedId && data.categories?.[0]) {
-        setSelectedId(data.categories[0].id);
-        setForm(toForm(data.categories[0]));
+
+      const nextCategories: CategoryRow[] = data.categories ?? [];
+      setCategories(nextCategories);
+
+      const nextSelectedId = preferredSelectedId ?? selectedId;
+      const preferredCategory = nextCategories.find(category => category.id === nextSelectedId);
+      if (preferredCategory) {
+        setSelectedId(preferredCategory.id);
+        setForm(toForm(preferredCategory));
+      } else if (nextCategories[0]) {
+        setSelectedId(nextCategories[0].id);
+        setForm(toForm(nextCategories[0]));
       }
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Не удалось загрузить разделы');
@@ -86,8 +94,9 @@ export function CategoryManager() {
     try {
       const payload = {
         ...form,
-        sortOrder: Number(form.sortOrder || 0),
+        sortOrder: Number(form.sortOrder || 1),
       };
+
       const res = await fetch(
         selectedId ? `/api/admin/categories/${encodeURIComponent(selectedId)}` : '/api/admin/categories',
         {
@@ -101,15 +110,7 @@ export function CategoryManager() {
       if (!res.ok) throw new Error(data.error ?? 'Не удалось сохранить раздел');
 
       setSuccess(selectedId ? 'Раздел сохранён' : 'Раздел создан');
-      setSelectedId(data.category.id);
-      setForm(toForm(data.category));
-      setCategories(prev => {
-        const exists = prev.some(category => category.id === data.category.id);
-        const next = exists
-          ? prev.map(category => (category.id === data.category.id ? data.category : category))
-          : [...prev, data.category];
-        return next.sort((a, b) => a.sortOrder - b.sortOrder || a.name.localeCompare(b.name, 'ru'));
-      });
+      await loadCategories(data.category.id);
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Не удалось сохранить раздел');
     } finally {
@@ -119,42 +120,44 @@ export function CategoryManager() {
 
   return (
     <div className="space-y-5">
-      <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
+      <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
         <div>
           <h1 className="text-2xl font-bold text-gray-900">Категории</h1>
-          <p className="text-sm text-gray-500 mt-1">Добавляйте разделы, меняйте порядок и скрывайте лишнее с сайта.</p>
+          <p className="mt-1 text-sm text-gray-500">
+            Добавляйте разделы, меняйте порядок и скрывайте лишнее с сайта.
+          </p>
         </div>
         <button
           type="button"
           onClick={startCreate}
-          className="inline-flex items-center gap-2 px-4 py-2.5 bg-blue-600 hover:bg-blue-700 text-white text-sm font-semibold rounded-lg transition-colors"
+          className="inline-flex items-center gap-2 rounded-lg bg-blue-600 px-4 py-2.5 text-sm font-semibold text-white transition-colors hover:bg-blue-700"
         >
-          <FolderPlus className="w-4 h-4" />
+          <FolderPlus className="h-4 w-4" />
           Добавить раздел
         </button>
       </div>
 
       {error && (
-        <div className="flex items-center gap-2 text-sm text-red-700 bg-red-50 border border-red-100 rounded-xl px-4 py-3">
-          <AlertCircle className="w-4 h-4 flex-shrink-0" />
+        <div className="flex items-center gap-2 rounded-xl border border-red-100 bg-red-50 px-4 py-3 text-sm text-red-700">
+          <AlertCircle className="h-4 w-4 flex-shrink-0" />
           {error}
         </div>
       )}
       {success && (
-        <div className="flex items-center gap-2 text-sm text-green-700 bg-green-50 border border-green-100 rounded-xl px-4 py-3">
-          <CheckCircle2 className="w-4 h-4 flex-shrink-0" />
+        <div className="flex items-center gap-2 rounded-xl border border-green-100 bg-green-50 px-4 py-3 text-sm text-green-700">
+          <CheckCircle2 className="h-4 w-4 flex-shrink-0" />
           {success}
         </div>
       )}
 
-      <div className="grid lg:grid-cols-[minmax(260px,360px)_1fr] gap-5">
-        <section className="bg-white rounded-2xl border border-gray-200 shadow-sm overflow-hidden">
-          <div className="p-4 border-b border-gray-100">
+      <div className="grid gap-5 lg:grid-cols-[minmax(260px,360px)_1fr]">
+        <section className="overflow-hidden rounded-2xl border border-gray-200 bg-white shadow-sm">
+          <div className="border-b border-gray-100 p-4">
             <p className="text-sm font-semibold text-gray-900">Все разделы</p>
           </div>
           {loading ? (
-            <div className="p-6 flex items-center gap-2 text-sm text-gray-500">
-              <Loader2 className="w-4 h-4 animate-spin" />
+            <div className="flex items-center gap-2 p-6 text-sm text-gray-500">
+              <Loader2 className="h-4 w-4 animate-spin" />
               Загрузка...
             </div>
           ) : (
@@ -164,19 +167,26 @@ export function CategoryManager() {
                   key={category.id}
                   type="button"
                   onClick={() => selectCategory(category)}
-                  className={`w-full text-left px-4 py-3 border-b border-gray-100 hover:bg-gray-50 transition-colors ${
+                  className={`w-full border-b border-gray-100 px-4 py-3 text-left transition-colors hover:bg-gray-50 ${
                     selectedId === category.id ? 'bg-blue-50' : ''
                   }`}
                 >
                   <div className="flex items-start justify-between gap-3">
                     <div className="min-w-0">
-                      <p className="text-sm font-semibold text-gray-900 truncate">{category.name}</p>
-                      <p className="text-xs text-gray-400 truncate">{category.slug}</p>
+                      <p className="truncate text-sm font-semibold text-gray-900">{category.name}</p>
+                      <div className="mt-1 flex items-center gap-2">
+                        <p className="truncate text-xs text-gray-400">{category.slug}</p>
+                        <span className="inline-flex items-center rounded-full bg-gray-100 px-2 py-0.5 text-[11px] font-semibold text-gray-600">
+                          #{category.sortOrder}
+                        </span>
+                      </div>
                     </div>
-                    <span className={`inline-flex items-center gap-1 text-[11px] font-semibold rounded-full px-2 py-0.5 ${
-                      category.isVisible ? 'bg-green-50 text-green-700' : 'bg-gray-100 text-gray-500'
-                    }`}>
-                      {category.isVisible ? <Eye className="w-3 h-3" /> : <EyeOff className="w-3 h-3" />}
+                    <span
+                      className={`inline-flex items-center gap-1 rounded-full px-2 py-0.5 text-[11px] font-semibold ${
+                        category.isVisible ? 'bg-green-50 text-green-700' : 'bg-gray-100 text-gray-500'
+                      }`}
+                    >
+                      {category.isVisible ? <Eye className="h-3 w-3" /> : <EyeOff className="h-3 w-3" />}
                       {category.isVisible ? 'виден' : 'скрыт'}
                     </span>
                   </div>
@@ -186,54 +196,58 @@ export function CategoryManager() {
           )}
         </section>
 
-        <form onSubmit={handleSubmit} className="bg-white rounded-2xl border border-gray-200 shadow-sm p-5 space-y-4">
+        <form onSubmit={handleSubmit} className="space-y-4 rounded-2xl border border-gray-200 bg-white p-5 shadow-sm">
           <div>
             <h2 className="text-lg font-semibold text-gray-900">
               {selectedCategory ? 'Редактировать раздел' : 'Новый раздел'}
             </h2>
             {selectedCategory && (
-              <p className="text-xs text-gray-400 mt-1">Slug не меняется: {selectedCategory.slug}</p>
+              <p className="mt-1 text-xs text-gray-400">Slug не меняется: {selectedCategory.slug}</p>
             )}
           </div>
 
           <div>
-            <label className="block text-xs font-medium text-gray-600 mb-1">Название</label>
+            <label className="mb-1 block text-xs font-medium text-gray-600">Название</label>
             <input
               value={form.name}
               onChange={e => setForm(prev => ({ ...prev, name: e.target.value }))}
               maxLength={180}
-              className="w-full px-3.5 py-2.5 border border-gray-300 rounded-xl text-sm outline-none focus:border-blue-400 focus:ring-2 focus:ring-blue-100"
+              className="w-full rounded-xl border border-gray-300 px-3.5 py-2.5 text-sm outline-none focus:border-blue-400 focus:ring-2 focus:ring-blue-100"
             />
           </div>
 
           <div>
-            <label className="block text-xs font-medium text-gray-600 mb-1">Описание</label>
+            <label className="mb-1 block text-xs font-medium text-gray-600">Описание</label>
             <textarea
               value={form.description}
               onChange={e => setForm(prev => ({ ...prev, description: e.target.value }))}
               maxLength={1000}
               rows={4}
-              className="w-full px-3.5 py-2.5 border border-gray-300 rounded-xl text-sm outline-none focus:border-blue-400 focus:ring-2 focus:ring-blue-100 resize-y"
+              className="w-full resize-y rounded-xl border border-gray-300 px-3.5 py-2.5 text-sm outline-none focus:border-blue-400 focus:ring-2 focus:ring-blue-100"
             />
           </div>
 
-          <div className="grid sm:grid-cols-2 gap-4">
+          <div className="grid gap-4 sm:grid-cols-2">
             <div>
-              <label className="block text-xs font-medium text-gray-600 mb-1">Порядок</label>
+              <label className="mb-1 block text-xs font-medium text-gray-600">Порядок</label>
               <input
                 type="number"
+                min={1}
                 value={form.sortOrder}
                 onChange={e => setForm(prev => ({ ...prev, sortOrder: e.target.value }))}
-                className="w-full px-3.5 py-2.5 border border-gray-300 rounded-xl text-sm outline-none focus:border-blue-400 focus:ring-2 focus:ring-blue-100"
+                className="w-full rounded-xl border border-gray-300 px-3.5 py-2.5 text-sm outline-none focus:border-blue-400 focus:ring-2 focus:ring-blue-100"
               />
+              <p className="mt-1 text-xs text-gray-400">
+                Это место раздела в списке. Если номер уже занят, остальные разделы автоматически сдвинутся.
+              </p>
             </div>
 
-            <label className="flex items-end gap-2 text-sm text-gray-700 pb-2">
+            <label className="flex items-end gap-2 pb-2 text-sm text-gray-700">
               <input
                 type="checkbox"
                 checked={form.isVisible}
                 onChange={e => setForm(prev => ({ ...prev, isVisible: e.target.checked }))}
-                className="w-4 h-4 rounded border-gray-300 text-blue-600"
+                className="h-4 w-4 rounded border-gray-300 text-blue-600"
               />
               Показывать на сайте
             </label>
@@ -242,9 +256,9 @@ export function CategoryManager() {
           <button
             type="submit"
             disabled={saving || !form.name.trim()}
-            className="inline-flex items-center gap-2 px-5 py-2.5 bg-gray-900 hover:bg-gray-800 text-white text-sm font-semibold rounded-lg transition-colors disabled:opacity-50"
+            className="inline-flex items-center gap-2 rounded-lg bg-gray-900 px-5 py-2.5 text-sm font-semibold text-white transition-colors hover:bg-gray-800 disabled:opacity-50"
           >
-            {saving ? <Loader2 className="w-4 h-4 animate-spin" /> : <Save className="w-4 h-4" />}
+            {saving ? <Loader2 className="h-4 w-4 animate-spin" /> : <Save className="h-4 w-4" />}
             {saving ? 'Сохранение...' : 'Сохранить раздел'}
           </button>
         </form>
@@ -252,4 +266,3 @@ export function CategoryManager() {
     </div>
   );
 }
-

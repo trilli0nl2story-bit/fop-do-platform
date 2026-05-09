@@ -1,4 +1,5 @@
 import type { StoreProduct } from '../data/storeProducts';
+import { getDisplayCoverUrl, getDisplayPreviewUrl } from './materialMediaLinks';
 
 interface DbStoreMaterial {
   id: string;
@@ -49,12 +50,11 @@ export function dbMaterialToStoreProduct(material: DbStoreMaterial): StoreProduc
     fileType: material.fileType,
     program: material.program || 'Универсальный',
     programColor: programColor(material.program || ''),
-    coverUrl: material.coverUrl,
+    coverUrl: getDisplayCoverUrl(material.coverUrl),
     previewText: material.previewText,
-    previewFileUrl: material.previewFileUrl,
+    previewFileUrl: getDisplayPreviewUrl(material.previewFileUrl),
     seoTitle: material.seoTitle,
     seoDescription: material.seoDescription,
     whatIsIncluded: [],
   };
 }
-

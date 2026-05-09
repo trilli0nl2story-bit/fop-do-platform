@@ -1,4 +1,4 @@
-'use client';
+﻿'use client';
 
 import { useEffect, useMemo, useState } from 'react';
 import {
@@ -6,12 +6,19 @@ import {
   CheckCircle2,
   FilePlus,
   FileText,
+  Image as ImageIcon,
   Loader2,
   PlusCircle,
   Search,
   Upload,
   X,
 } from 'lucide-react';
+import {
+  getDisplayCoverUrl,
+  getPreviewPresentation,
+  isYandexDiskPublicAssetUrl,
+  type PreviewPresentation,
+} from '@/src/lib/materialMediaLinks';
 
 type AccessFilter = 'all' | 'store' | 'free' | 'subscription';
 type FileRole = 'paid' | 'preview' | 'cover';
@@ -80,16 +87,16 @@ interface CategoryRow {
 }
 
 const accessLabels: Record<AccessFilter, string> = {
-  all: 'Все',
-  store: 'Магазин',
-  free: 'Бесплатные',
-  subscription: 'Подписка',
+  all: 'Р’СЃРµ',
+  store: 'РњР°РіР°Р·РёРЅ',
+  free: 'Р‘РµСЃРїР»Р°С‚РЅС‹Рµ',
+  subscription: 'РџРѕРґРїРёСЃРєР°',
 };
 
 const fileRoleLabels: Record<FileRole, string> = {
-  paid: 'Основной файл',
-  preview: 'Превью',
-  cover: 'Обложка',
+  paid: 'РћСЃРЅРѕРІРЅРѕР№ С„Р°Р№Р»',
+  preview: 'РџСЂРµРІСЊСЋ',
+  cover: 'РћР±Р»РѕР¶РєР°',
 };
 
 function materialToForm(material: MaterialInfo): MaterialForm {
@@ -157,7 +164,7 @@ function buildSeoFields(form: MaterialForm) {
   ).trim();
 
   return {
-    seoTitle: title ? `${title} — материал для педагогов` : '',
+    seoTitle: title ? `${title} вЂ” РјР°С‚РµСЂРёР°Р» РґР»СЏ РїРµРґР°РіРѕРіРѕРІ` : '',
     seoDescription: descriptionSource.slice(0, 180),
   };
 }
@@ -172,16 +179,90 @@ function formatDate(iso: string) {
 }
 
 function formatBytes(n: number | null) {
-  if (!n) return 'размер не указан';
-  if (n < 1024) return `${n} Б`;
-  if (n < 1024 * 1024) return `${(n / 1024).toFixed(1)} КБ`;
-  return `${(n / 1024 / 1024).toFixed(2)} МБ`;
+  if (!n) return 'СЂР°Р·РјРµСЂ РЅРµ СѓРєР°Р·Р°РЅ';
+  if (n < 1024) return `${n} Р‘`;
+  if (n < 1024 * 1024) return `${(n / 1024).toFixed(1)} РљР‘`;
+  return `${(n / 1024 / 1024).toFixed(2)} РњР‘`;
 }
 
 function roleBadgeClass(role: string) {
   if (role === 'paid') return 'bg-amber-50 text-amber-700 border-amber-100';
   if (role === 'preview') return 'bg-blue-50 text-blue-700 border-blue-100';
   return 'bg-gray-100 text-gray-600 border-gray-200';
+}
+
+function CoverPreview({ src }: { src: string }) {
+  const [failed, setFailed] = useState(false);
+
+  if (!src || failed) {
+    return <FileText className="w-8 h-8 text-blue-200" />;
+  }
+
+  return (
+    <img
+      src={src}
+      alt=""
+      className="w-full h-full object-cover"
+      onError={() => setFailed(true)}
+    />
+  );
+}
+
+function PreviewCard({ presentation }: { presentation: PreviewPresentation }) {
+  if (presentation.kind === 'none') {
+    return (
+      <div className="flex h-full min-h-[200px] flex-col items-center justify-center rounded-xl border border-dashed border-gray-200 bg-gray-50 p-5 text-center">
+        <ImageIcon className="mb-3 h-8 w-8 text-gray-300" />
+        <p className="text-sm font-medium text-gray-500">РџСЂРµРІСЊСЋ РїРѕРєР° РЅРµ РґРѕР±Р°РІР»РµРЅРѕ</p>
+        <p className="mt-1 text-xs text-gray-400">РЎСЋРґР° РјРѕР¶РЅРѕ РїРѕРґСЃС‚Р°РІРёС‚СЊ РІРёРґРµРѕ, PDF, РёР·РѕР±СЂР°Р¶РµРЅРёРµ РёР»Рё СЃСЃС‹Р»РєСѓ РЅР° РїСЂРµРґРїСЂРѕСЃРјРѕС‚СЂ.</p>
+      </div>
+    );
+  }
+
+  if (presentation.kind === 'embed') {
+    return (
+      <div className="overflow-hidden rounded-xl border border-blue-100 bg-white">
+        <div className="aspect-video bg-black">
+          <iframe
+            src={presentation.src}
+            title="РџСЂРµРґРїСЂРѕСЃРјРѕС‚СЂ РјР°С‚РµСЂРёР°Р»Р°"
+            className="h-full w-full"
+            allow="autoplay; encrypted-media; picture-in-picture; fullscreen"
+            allowFullScreen
+          />
+        </div>
+      </div>
+    );
+  }
+
+  if (presentation.kind === 'image') {
+    return (
+      <div className="overflow-hidden rounded-xl border border-blue-100 bg-white">
+        <div className="aspect-video bg-gray-50">
+          <img
+            src={presentation.src}
+            alt=""
+            className="h-full w-full object-contain"
+          />
+        </div>
+      </div>
+    );
+  }
+
+  return (
+    <div className="flex h-full min-h-[200px] flex-col items-center justify-center rounded-xl border border-blue-100 bg-white p-5 text-center">
+      <FileText className="mb-3 h-8 w-8 text-blue-200" />
+      <p className="text-sm font-medium text-gray-700">РџСЂРµРґРїСЂРѕСЃРјРѕС‚СЂ РґРѕСЃС‚СѓРїРµРЅ РїРѕ СЃСЃС‹Р»РєРµ</p>
+      <a
+        href={presentation.href}
+        target="_blank"
+        rel="noreferrer"
+        className="mt-3 inline-flex text-sm font-semibold text-blue-600 hover:text-blue-700"
+      >
+        РћС‚РєСЂС‹С‚СЊ РїСЂРµРґРїСЂРѕСЃРјРѕС‚СЂ
+      </a>
+    </div>
+  );
 }
 
 export function MaterialFileManager() {
@@ -239,18 +320,18 @@ export function MaterialFileManager() {
         const params = new URLSearchParams({
           search,
           accessType: accessFilter,
-          limit: '80',
+          limit: '300',
         });
         const res = await fetch(`/api/admin/materials?${params.toString()}`, {
           credentials: 'include',
           signal: controller.signal,
         });
         const data = await res.json();
-        if (!res.ok) throw new Error(data.error ?? 'Не удалось загрузить материалы');
+        if (!res.ok) throw new Error(data.error ?? 'РќРµ СѓРґР°Р»РѕСЃСЊ Р·Р°РіСЂСѓР·РёС‚СЊ РјР°С‚РµСЂРёР°Р»С‹');
         setMaterials(data.materials ?? []);
       } catch (err) {
         if (controller.signal.aborted) return;
-        setMaterialsError(err instanceof Error ? err.message : 'Не удалось загрузить материалы');
+        setMaterialsError(err instanceof Error ? err.message : 'РќРµ СѓРґР°Р»РѕСЃСЊ Р·Р°РіСЂСѓР·РёС‚СЊ РјР°С‚РµСЂРёР°Р»С‹');
       } finally {
         if (!controller.signal.aborted) setMaterialsLoading(false);
       }
@@ -278,12 +359,12 @@ export function MaterialFileManager() {
         credentials: 'include',
       });
       const data = await res.json();
-      if (!res.ok) throw new Error(data.error ?? 'Не удалось открыть материал');
+      if (!res.ok) throw new Error(data.error ?? 'РќРµ СѓРґР°Р»РѕСЃСЊ РѕС‚РєСЂС‹С‚СЊ РјР°С‚РµСЂРёР°Р»');
       setSelectedMaterial(data.material);
       setMaterialForm(materialToForm(data.material));
       setFiles(data.files ?? []);
     } catch (err) {
-      setDetailsError(err instanceof Error ? err.message : 'Не удалось открыть материал');
+      setDetailsError(err instanceof Error ? err.message : 'РќРµ СѓРґР°Р»РѕСЃСЊ РѕС‚РєСЂС‹С‚СЊ РјР°С‚РµСЂРёР°Р»');
     } finally {
       setDetailsLoading(false);
     }
@@ -334,9 +415,9 @@ export function MaterialFileManager() {
         }),
       });
       const data = await res.json();
-      if (!res.ok) throw new Error(data.error ?? 'Не удалось создать материал');
+      if (!res.ok) throw new Error(data.error ?? 'РќРµ СѓРґР°Р»РѕСЃСЊ СЃРѕР·РґР°С‚СЊ РјР°С‚РµСЂРёР°Р»');
 
-      setCreateSuccess('Материал создан. Теперь можно загрузить файл.');
+      setCreateSuccess('РњР°С‚РµСЂРёР°Р» СЃРѕР·РґР°РЅ. РўРµРїРµСЂСЊ РјРѕР¶РЅРѕ Р·Р°РіСЂСѓР·РёС‚СЊ С„Р°Р№Р».');
       setCreateForm(emptyMaterialForm());
       setCreateOpen(false);
       setSearch('');
@@ -353,7 +434,7 @@ export function MaterialFileManager() {
       }, ...prev]);
       await selectMaterial(data.material.slug);
     } catch (err) {
-      setCreateError(err instanceof Error ? err.message : 'Не удалось создать материал');
+      setCreateError(err instanceof Error ? err.message : 'РќРµ СѓРґР°Р»РѕСЃСЊ СЃРѕР·РґР°С‚СЊ РјР°С‚РµСЂРёР°Р»');
     } finally {
       setCreateLoading(false);
     }
@@ -380,12 +461,12 @@ export function MaterialFileManager() {
         }),
       });
       const data = await res.json();
-      if (!res.ok) throw new Error(data.error ?? 'Не удалось сохранить изменения');
+      if (!res.ok) throw new Error(data.error ?? 'РќРµ СѓРґР°Р»РѕСЃСЊ СЃРѕС…СЂР°РЅРёС‚СЊ РёР·РјРµРЅРµРЅРёСЏ');
 
       setSelectedMaterial(data.material);
       setMaterialForm(materialToForm(data.material));
       setStatusChangeConfirmed(false);
-      setSaveSuccess('Изменения сохранены');
+      setSaveSuccess('РР·РјРµРЅРµРЅРёСЏ СЃРѕС…СЂР°РЅРµРЅС‹');
       setMaterials(prev => prev.map(item => (
         item.id === data.material.id
           ? {
@@ -399,7 +480,7 @@ export function MaterialFileManager() {
           : item
       )));
     } catch (err) {
-      setSaveError(err instanceof Error ? err.message : 'Не удалось сохранить изменения');
+      setSaveError(err instanceof Error ? err.message : 'РќРµ СѓРґР°Р»РѕСЃСЊ СЃРѕС…СЂР°РЅРёС‚СЊ РёР·РјРµРЅРµРЅРёСЏ');
     } finally {
       setSaveLoading(false);
     }
@@ -433,8 +514,8 @@ export function MaterialFileManager() {
         body: form,
       });
       const data = await res.json();
-      if (!res.ok) throw new Error(data.message ?? data.error ?? 'Не удалось загрузить файл');
-      setUploadSuccess(`Файл загружен и подключён к материалу`);
+      if (!res.ok) throw new Error(data.message ?? data.error ?? 'РќРµ СѓРґР°Р»РѕСЃСЊ Р·Р°РіСЂСѓР·РёС‚СЊ С„Р°Р№Р»');
+      setUploadSuccess(`Р¤Р°Р№Р» Р·Р°РіСЂСѓР¶РµРЅ Рё РїРѕРґРєР»СЋС‡С‘РЅ Рє РјР°С‚РµСЂРёР°Р»Сѓ`);
       if (data.materialUpdate?.coverUrl || data.materialUpdate?.previewFileUrl) {
         const patch = {
           ...(data.materialUpdate.coverUrl ? { coverUrl: data.materialUpdate.coverUrl } : {}),
@@ -449,7 +530,7 @@ export function MaterialFileManager() {
         item.slug === selectedMaterial.slug ? { ...item, fileCount: item.fileCount + 1 } : item
       )));
     } catch (err) {
-      setUploadError(err instanceof Error ? err.message : 'Не удалось загрузить файл');
+      setUploadError(err instanceof Error ? err.message : 'РќРµ СѓРґР°Р»РѕСЃСЊ Р·Р°РіСЂСѓР·РёС‚СЊ С„Р°Р№Р»');
     } finally {
       setUploadLoading(false);
     }
@@ -464,7 +545,7 @@ export function MaterialFileManager() {
     try {
       const fileSize = manualSize.trim() ? parseInt(manualSize.trim(), 10) : null;
       if (fileSize !== null && (!Number.isFinite(fileSize) || fileSize < 0)) {
-        throw new Error('Размер файла должен быть положительным числом');
+        throw new Error('Р Р°Р·РјРµСЂ С„Р°Р№Р»Р° РґРѕР»Р¶РµРЅ Р±С‹С‚СЊ РїРѕР»РѕР¶РёС‚РµР»СЊРЅС‹Рј С‡РёСЃР»РѕРј');
       }
 
       const res = await fetch('/api/admin/material-files', {
@@ -479,22 +560,38 @@ export function MaterialFileManager() {
         }),
       });
       const data = await res.json();
-      if (!res.ok) throw new Error(data.error ?? 'Не удалось зарегистрировать файл');
-      setManualSuccess('Файл зарегистрирован');
+      if (!res.ok) throw new Error(data.error ?? 'РќРµ СѓРґР°Р»РѕСЃСЊ Р·Р°СЂРµРіРёСЃС‚СЂРёСЂРѕРІР°С‚СЊ С„Р°Р№Р»');
+      setManualSuccess('Р¤Р°Р№Р» Р·Р°СЂРµРіРёСЃС‚СЂРёСЂРѕРІР°РЅ');
       setManualKey('');
       setManualSize('');
       await refreshSelectedFiles();
     } catch (err) {
-      setManualError(err instanceof Error ? err.message : 'Не удалось зарегистрировать файл');
+      setManualError(err instanceof Error ? err.message : 'РќРµ СѓРґР°Р»РѕСЃСЊ Р·Р°СЂРµРіРёСЃС‚СЂРёСЂРѕРІР°С‚СЊ С„Р°Р№Р»');
     } finally {
       setManualLoading(false);
     }
   }
 
   const selectedFilesTitle = useMemo(() => {
-    if (!selectedMaterial) return 'Выберите материал слева';
+    if (!selectedMaterial) return 'Р’С‹Р±РµСЂРёС‚Рµ РјР°С‚РµСЂРёР°Р» СЃР»РµРІР°';
     return selectedMaterial.title;
   }, [selectedMaterial]);
+
+  const createCoverPreviewUrl = useMemo(() => getDisplayCoverUrl(createForm.coverUrl), [createForm.coverUrl]);
+  const createPreviewPresentation = useMemo(
+    () => getPreviewPresentation(createForm.previewFileUrl),
+    [createForm.previewFileUrl]
+  );
+  const editCoverPreviewUrl = useMemo(
+    () => getDisplayCoverUrl(materialForm?.coverUrl ?? ''),
+    [materialForm?.coverUrl]
+  );
+  const editPreviewPresentation = useMemo(
+    () => getPreviewPresentation(materialForm?.previewFileUrl ?? ''),
+    [materialForm?.previewFileUrl]
+  );
+  const createYandexCover = isYandexDiskPublicAssetUrl(createForm.coverUrl);
+  const editYandexCover = isYandexDiskPublicAssetUrl(materialForm?.coverUrl ?? '');
 
   const savedForm = selectedMaterial ? materialToForm(selectedMaterial) : null;
   const hasUnsavedChanges = normalizeFormForCompare(materialForm) !== normalizeFormForCompare(savedForm);
@@ -513,9 +610,9 @@ export function MaterialFileManager() {
     <div className="space-y-5">
       <div className="flex flex-col lg:flex-row lg:items-start lg:justify-between gap-3">
         <div>
-          <h1 className="text-2xl font-bold text-gray-900 mb-1">Документы</h1>
+          <h1 className="text-2xl font-bold text-gray-900 mb-1">Р”РѕРєСѓРјРµРЅС‚С‹</h1>
           <p className="text-sm text-gray-500">
-            Здесь создаются материалы, выбирается раздел и подключаются файлы: основной документ, превью или обложка.
+            Р—РґРµСЃСЊ СЃРѕР·РґР°СЋС‚СЃСЏ РјР°С‚РµСЂРёР°Р»С‹, РІС‹Р±РёСЂР°РµС‚СЃСЏ СЂР°Р·РґРµР» Рё РїРѕРґРєР»СЋС‡Р°СЋС‚СЃСЏ С„Р°Р№Р»С‹: РѕСЃРЅРѕРІРЅРѕР№ РґРѕРєСѓРјРµРЅС‚, РїСЂРµРІСЊСЋ РёР»Рё РѕР±Р»РѕР¶РєР°.
           </p>
         </div>
         <button
@@ -528,7 +625,7 @@ export function MaterialFileManager() {
           className="inline-flex items-center justify-center gap-2 px-4 py-2.5 bg-blue-500 hover:bg-blue-600 text-white text-sm font-semibold rounded-xl transition-colors"
         >
           <PlusCircle className="w-4 h-4" />
-          Создать материал
+          РЎРѕР·РґР°С‚СЊ РјР°С‚РµСЂРёР°Р»
         </button>
       </div>
 
@@ -543,16 +640,16 @@ export function MaterialFileManager() {
         <section className="bg-white rounded-2xl border border-blue-100 shadow-sm p-5">
           <div className="flex items-start justify-between gap-3 mb-4">
             <div>
-              <h2 className="text-lg font-bold text-gray-900">Новый материал</h2>
+              <h2 className="text-lg font-bold text-gray-900">РќРѕРІС‹Р№ РјР°С‚РµСЂРёР°Р»</h2>
               <p className="text-sm text-gray-500 mt-1">
-                Заполните понятные поля. Адрес страницы создастся автоматически из названия.
+                Р—Р°РїРѕР»РЅРёС‚Рµ РїРѕРЅСЏС‚РЅС‹Рµ РїРѕР»СЏ. РђРґСЂРµСЃ СЃС‚СЂР°РЅРёС†С‹ СЃРѕР·РґР°СЃС‚СЃСЏ Р°РІС‚РѕРјР°С‚РёС‡РµСЃРєРё РёР· РЅР°Р·РІР°РЅРёСЏ.
               </p>
             </div>
             <button
               type="button"
               onClick={() => setCreateOpen(false)}
               className="p-2 rounded-lg hover:bg-gray-100 text-gray-400"
-              aria-label="Закрыть"
+              aria-label="Р—Р°РєСЂС‹С‚СЊ"
             >
               <X className="w-5 h-5" />
             </button>
@@ -561,25 +658,25 @@ export function MaterialFileManager() {
           <form onSubmit={handleCreateMaterial} className="space-y-4">
             <div className="grid md:grid-cols-2 gap-3">
               <div className="md:col-span-2">
-                <label className="block text-xs font-medium text-gray-600 mb-1">Название *</label>
+                <label className="block text-xs font-medium text-gray-600 mb-1">РќР°Р·РІР°РЅРёРµ *</label>
                 <input
                   value={createForm.title}
                   onChange={e => updateCreateForm('title', e.target.value)}
                   maxLength={220}
                   required
-                  placeholder="Например: Конспект занятия «Весна пришла»"
+                  placeholder="РќР°РїСЂРёРјРµСЂ: РљРѕРЅСЃРїРµРєС‚ Р·Р°РЅСЏС‚РёСЏ В«Р’РµСЃРЅР° РїСЂРёС€Р»Р°В»"
                   className="w-full px-3.5 py-2.5 border border-gray-300 rounded-xl text-sm outline-none focus:border-blue-400 focus:ring-2 focus:ring-blue-100"
                 />
               </div>
 
               <div>
-                <label className="block text-xs font-medium text-gray-600 mb-1">Раздел</label>
+                <label className="block text-xs font-medium text-gray-600 mb-1">Р Р°Р·РґРµР»</label>
                 <select
                   value={createForm.categoryId}
                   onChange={e => updateCreateForm('categoryId', e.target.value)}
                   className="w-full px-3.5 py-2.5 border border-gray-300 rounded-xl text-sm bg-white outline-none focus:border-blue-400 focus:ring-2 focus:ring-blue-100"
                 >
-                  <option value="">Без раздела</option>
+                  <option value="">Р‘РµР· СЂР°Р·РґРµР»Р°</option>
                   {categories.map(category => (
                     <option key={category.id} value={category.id}>{category.name}</option>
                   ))}
@@ -587,31 +684,31 @@ export function MaterialFileManager() {
               </div>
 
               <div>
-                <label className="block text-xs font-medium text-gray-600 mb-1">Программа</label>
+                <label className="block text-xs font-medium text-gray-600 mb-1">РџСЂРѕРіСЂР°РјРјР°</label>
                 <input
                   value={createForm.program}
                   onChange={e => updateCreateForm('program', e.target.value)}
                   maxLength={160}
-                  placeholder="Например: ФОП ДО"
+                  placeholder="РќР°РїСЂРёРјРµСЂ: Р¤РћРџ Р”Рћ"
                   className="w-full px-3.5 py-2.5 border border-gray-300 rounded-xl text-sm outline-none focus:border-blue-400 focus:ring-2 focus:ring-blue-100"
                 />
               </div>
 
               <div>
-                <label className="block text-xs font-medium text-gray-600 mb-1">Тип доступа</label>
+                <label className="block text-xs font-medium text-gray-600 mb-1">РўРёРї РґРѕСЃС‚СѓРїР°</label>
                 <select
                   value={createForm.accessType}
                   onChange={e => updateCreateForm('accessType', e.target.value as MaterialForm['accessType'])}
                   className="w-full px-3.5 py-2.5 border border-gray-300 rounded-xl text-sm bg-white outline-none focus:border-blue-400 focus:ring-2 focus:ring-blue-100"
                 >
-                  <option value="store">Магазин</option>
-                  <option value="free">Бесплатный</option>
-                  <option value="subscription">По подписке</option>
+                  <option value="store">РњР°РіР°Р·РёРЅ</option>
+                  <option value="free">Р‘РµСЃРїР»Р°С‚РЅС‹Р№</option>
+                  <option value="subscription">РџРѕ РїРѕРґРїРёСЃРєРµ</option>
                 </select>
               </div>
 
               <div>
-                <label className="block text-xs font-medium text-gray-600 mb-1">Тип файла</label>
+                <label className="block text-xs font-medium text-gray-600 mb-1">РўРёРї С„Р°Р№Р»Р°</label>
                 <select
                   value={createForm.fileType}
                   onChange={e => updateCreateForm('fileType', e.target.value as MaterialForm['fileType'])}
@@ -625,7 +722,7 @@ export function MaterialFileManager() {
               </div>
 
               <div>
-                <label className="block text-xs font-medium text-gray-600 mb-1">Цена, ₽</label>
+                <label className="block text-xs font-medium text-gray-600 mb-1">Р¦РµРЅР°, в‚Ѕ</label>
                 <input
                   type="number"
                   min={0}
@@ -645,7 +742,7 @@ export function MaterialFileManager() {
                     onChange={e => updateCreateForm('isPublished', e.target.checked)}
                     className="w-4 h-4 rounded border-gray-300 text-blue-600"
                   />
-                  Опубликовать сразу
+                  РћРїСѓР±Р»РёРєРѕРІР°С‚СЊ СЃСЂР°Р·Сѓ
                 </label>
                 <label className="inline-flex items-center gap-2 text-sm text-gray-700">
                   <input
@@ -654,12 +751,12 @@ export function MaterialFileManager() {
                     onChange={e => updateCreateForm('isFeatured', e.target.checked)}
                     className="w-4 h-4 rounded border-gray-300 text-blue-600"
                   />
-                  Избранный материал
+                  РР·Р±СЂР°РЅРЅС‹Р№ РјР°С‚РµСЂРёР°Р»
                 </label>
               </div>
 
               <div className="md:col-span-2">
-                <label className="block text-xs font-medium text-gray-600 mb-1">Короткое описание</label>
+                <label className="block text-xs font-medium text-gray-600 mb-1">РљРѕСЂРѕС‚РєРѕРµ РѕРїРёСЃР°РЅРёРµ</label>
                 <textarea
                   value={createForm.shortDescription}
                   onChange={e => updateCreateForm('shortDescription', e.target.value)}
@@ -677,7 +774,15 @@ export function MaterialFileManager() {
                   placeholder="https://... или /images/cover.jpg"
                   className="w-full px-3.5 py-2.5 border border-gray-300 rounded-xl text-sm outline-none focus:border-blue-400 focus:ring-2 focus:ring-blue-100"
                 />
-                <p className="text-xs text-gray-400 mt-1">Обложка карточки материала. Можно оставить пустым.</p>
+                <p className="text-xs text-gray-400 mt-1">
+                  Обложка карточки материала. Поддерживается прямая ссылка на изображение, публичная ссылка Яндекс Диска
+                  и загруженный ниже файл с ролью «Обложка».
+                </p>
+                {createYandexCover && (
+                  <p className="text-xs text-blue-600 mt-1">
+                    Ссылка Яндекс Диска будет показана через наш встроенный просмотрщик, чтобы обложка не ломалась на сайте.
+                  </p>
+                )}
               </div>
 
               <div>
@@ -688,7 +793,10 @@ export function MaterialFileManager() {
                   placeholder="https://... видео, презентация или PDF-превью"
                   className="w-full px-3.5 py-2.5 border border-gray-300 rounded-xl text-sm outline-none focus:border-blue-400 focus:ring-2 focus:ring-blue-100"
                 />
-                <p className="text-xs text-gray-400 mt-1">Например ссылка на Rutube/YouTube/облако с предпросмотром.</p>
+                <p className="text-xs text-gray-400 mt-1">
+                  Можно вставить ссылку на видео, PDF-превью или iframe-код. Публичные ссылки VK Видео будут
+                  открываться внутри сайта.
+                </p>
               </div>
 
               <div className="md:col-span-2">
@@ -703,6 +811,28 @@ export function MaterialFileManager() {
                 />
               </div>
 
+              {(createForm.coverUrl || createForm.previewText || createForm.previewFileUrl) && (
+                <div className="md:col-span-2 rounded-2xl border border-blue-100 bg-blue-50/50 p-4">
+                  <p className="mb-3 text-xs font-semibold uppercase tracking-wide text-blue-700">Как это будет выглядеть</p>
+                  <div className="grid gap-4 lg:grid-cols-[160px_1fr]">
+                    <div className="overflow-hidden rounded-xl border border-blue-100 bg-white">
+                      <div className="aspect-[4/3] flex items-center justify-center bg-white">
+                        <CoverPreview src={createCoverPreviewUrl} />
+                      </div>
+                    </div>
+                    <div className="space-y-3">
+                      <div>
+                        <p className="line-clamp-2 font-semibold text-gray-900">{createForm.title || 'Новый материал'}</p>
+                        <p className="mt-2 line-clamp-3 text-sm text-gray-600">
+                          {createForm.previewText || createForm.shortDescription || 'Текст предпросмотра появится здесь.'}
+                        </p>
+                      </div>
+                      <PreviewCard presentation={createPreviewPresentation} />
+                    </div>
+                  </div>
+                </div>
+              )}
+
               <div className="md:col-span-2">
                 <label className="block text-xs font-medium text-gray-600 mb-1">Полное описание</label>
                 <textarea
@@ -716,7 +846,7 @@ export function MaterialFileManager() {
             </div>
 
             <div className="rounded-xl border border-green-100 bg-green-50 px-4 py-3 text-xs text-green-800">
-              Защита включена: slug создаётся автоматически, новый материал пишется в журнал изменений, файл можно загрузить сразу после создания.
+              Р—Р°С‰РёС‚Р° РІРєР»СЋС‡РµРЅР°: slug СЃРѕР·РґР°С‘С‚СЃСЏ Р°РІС‚РѕРјР°С‚РёС‡РµСЃРєРё, РЅРѕРІС‹Р№ РјР°С‚РµСЂРёР°Р» РїРёС€РµС‚СЃСЏ РІ Р¶СѓСЂРЅР°Р» РёР·РјРµРЅРµРЅРёР№, С„Р°Р№Р» РјРѕР¶РЅРѕ Р·Р°РіСЂСѓР·РёС‚СЊ СЃСЂР°Р·Сѓ РїРѕСЃР»Рµ СЃРѕР·РґР°РЅРёСЏ.
             </div>
 
             {createError && (
@@ -732,7 +862,7 @@ export function MaterialFileManager() {
               className="inline-flex items-center gap-2 px-5 py-2.5 bg-gray-900 hover:bg-gray-800 text-white text-sm font-semibold rounded-xl transition-colors disabled:opacity-50"
             >
               {createLoading ? <Loader2 className="w-4 h-4 animate-spin" /> : <PlusCircle className="w-4 h-4" />}
-              {createLoading ? 'Создание...' : 'Создать материал'}
+              {createLoading ? 'РЎРѕР·РґР°РЅРёРµ...' : 'РЎРѕР·РґР°С‚СЊ РјР°С‚РµСЂРёР°Р»'}
             </button>
           </form>
         </section>
@@ -746,7 +876,7 @@ export function MaterialFileManager() {
               <input
                 value={search}
                 onChange={e => setSearch(e.target.value)}
-                placeholder="Поиск по названию или slug"
+                placeholder="РџРѕРёСЃРє РїРѕ РЅР°Р·РІР°РЅРёСЋ РёР»Рё slug"
                 className="w-full pl-9 pr-3 py-2.5 border border-gray-300 rounded-xl text-sm outline-none focus:border-blue-400 focus:ring-2 focus:ring-blue-100"
               />
             </div>
@@ -780,7 +910,7 @@ export function MaterialFileManager() {
               </div>
             )}
             {!materialsLoading && !materialsError && materials.length === 0 && (
-              <div className="p-6 text-sm text-gray-400">Материалы не найдены.</div>
+              <div className="p-6 text-sm text-gray-400">РњР°С‚РµСЂРёР°Р»С‹ РЅРµ РЅР°Р№РґРµРЅС‹.</div>
             )}
             {!materialsLoading && !materialsError && materials.map(material => (
               <button
@@ -805,7 +935,7 @@ export function MaterialFileManager() {
                     {material.accessType}
                   </span>
                   <span className="text-xs px-2 py-0.5 rounded-full bg-gray-100 text-gray-600">
-                    {material.fileType ?? 'файл'}
+                    {material.fileType ?? 'С„Р°Р№Р»'}
                   </span>
                   {material.categoryName && (
                     <span className="text-xs px-2 py-0.5 rounded-full bg-green-50 text-green-700 truncate max-w-[150px]">
@@ -837,17 +967,17 @@ export function MaterialFileManager() {
                         {selectedMaterial.accessType}
                       </span>
                       <span className="text-xs px-2 py-0.5 rounded-full bg-gray-100 text-gray-600">
-                        {selectedMaterial.fileType ?? 'файл'}
+                        {selectedMaterial.fileType ?? 'С„Р°Р№Р»'}
                       </span>
                       <span className={`text-xs px-2 py-0.5 rounded-full ${
                         selectedMaterial.isPublished ? 'bg-green-50 text-green-700' : 'bg-red-50 text-red-600'
                       }`}>
-                        {selectedMaterial.isPublished ? 'Опубликован' : 'Не опубликован'}
+                        {selectedMaterial.isPublished ? 'РћРїСѓР±Р»РёРєРѕРІР°РЅ' : 'РќРµ РѕРїСѓР±Р»РёРєРѕРІР°РЅ'}
                       </span>
                     </div>
                   ) : (
                     <p className="text-sm text-gray-500 mt-1">
-                      Слева можно найти материал по названию или slug и сразу загрузить к нему файл.
+                      РЎР»РµРІР° РјРѕР¶РЅРѕ РЅР°Р№С‚Рё РјР°С‚РµСЂРёР°Р» РїРѕ РЅР°Р·РІР°РЅРёСЋ РёР»Рё slug Рё СЃСЂР°Р·Сѓ Р·Р°РіСЂСѓР·РёС‚СЊ Рє РЅРµРјСѓ С„Р°Р№Р».
                     </p>
                   )}
                 </div>
@@ -866,21 +996,21 @@ export function MaterialFileManager() {
                     <form onSubmit={handleSaveMaterial} className="rounded-2xl border border-gray-200 bg-gray-50/60 p-4 space-y-4">
                       <div className="flex flex-col sm:flex-row sm:items-start sm:justify-between gap-3">
                         <div>
-                          <p className="text-sm font-semibold text-gray-900">Карточка материала</p>
+                          <p className="text-sm font-semibold text-gray-900">РљР°СЂС‚РѕС‡РєР° РјР°С‚РµСЂРёР°Р»Р°</p>
                           <p className="text-xs text-gray-500 mt-1">
-                            Изменения не сохраняются автоматически. Slug заблокирован, чтобы не сломать ссылки.
+                            РР·РјРµРЅРµРЅРёСЏ РЅРµ СЃРѕС…СЂР°РЅСЏСЋС‚СЃСЏ Р°РІС‚РѕРјР°С‚РёС‡РµСЃРєРё. Slug Р·Р°Р±Р»РѕРєРёСЂРѕРІР°РЅ, С‡С‚РѕР±С‹ РЅРµ СЃР»РѕРјР°С‚СЊ СЃСЃС‹Р»РєРё.
                           </p>
                         </div>
                         {hasUnsavedChanges && (
                           <span className="self-start text-xs px-2 py-1 rounded-full bg-amber-50 text-amber-700 font-semibold">
-                            есть несохранённые изменения
+                            РµСЃС‚СЊ РЅРµСЃРѕС…СЂР°РЅС‘РЅРЅС‹Рµ РёР·РјРµРЅРµРЅРёСЏ
                           </span>
                         )}
                       </div>
 
                       <div className="grid md:grid-cols-2 gap-3">
                         <div className="md:col-span-2">
-                          <label className="block text-xs font-medium text-gray-600 mb-1">Название *</label>
+                          <label className="block text-xs font-medium text-gray-600 mb-1">РќР°Р·РІР°РЅРёРµ *</label>
                           <input
                             value={materialForm.title}
                             onChange={e => updateMaterialForm('title', e.target.value)}
@@ -942,7 +1072,14 @@ export function MaterialFileManager() {
                             placeholder="https://... или /images/cover.jpg"
                             className="w-full px-3.5 py-2.5 border border-gray-300 rounded-xl text-sm outline-none focus:border-blue-400 focus:ring-2 focus:ring-blue-100"
                           />
-                          <p className="text-xs text-gray-400 mt-1">Обложка карточки материала. Можно загрузить файл ниже как «Обложка» или вставить ссылку.</p>
+                          <p className="text-xs text-gray-400 mt-1">
+                            Обложка карточки материала. Можно загрузить файл ниже как «Обложка» или вставить ссылку.
+                          </p>
+                          {editYandexCover && (
+                            <p className="text-xs text-blue-600 mt-1">
+                              Публичная ссылка Яндекс Диска будет показана через встроенный просмотрщик, поэтому обложка останется внутри сайта.
+                            </p>
+                          )}
                         </div>
 
                         <div>
@@ -953,7 +1090,9 @@ export function MaterialFileManager() {
                             placeholder="https://... видео, презентация или PDF-превью"
                             className="w-full px-3.5 py-2.5 border border-gray-300 rounded-xl text-sm outline-none focus:border-blue-400 focus:ring-2 focus:ring-blue-100"
                           />
-                          <p className="text-xs text-gray-400 mt-1">Ссылка на видео-предпросмотр или файл, который можно показать до покупки.</p>
+                          <p className="text-xs text-gray-400 mt-1">
+                            Публичные ссылки VK Видео будут открываться прямо у нас во встроенном окне, без выброса на внешний сайт.
+                          </p>
                         </div>
 
                         <div className="md:col-span-2">
@@ -971,43 +1110,27 @@ export function MaterialFileManager() {
                         {(materialForm.coverUrl || materialForm.previewText || materialForm.previewFileUrl) && (
                           <div className="md:col-span-2 rounded-2xl border border-blue-100 bg-blue-50/50 p-4">
                             <p className="text-xs font-semibold uppercase tracking-wide text-blue-700 mb-3">Как это выглядит на сайте</p>
-                            <div className="grid sm:grid-cols-[160px_1fr] gap-4">
-                              <div className="aspect-[4/3] rounded-xl bg-white border border-blue-100 overflow-hidden flex items-center justify-center">
-                                {materialForm.coverUrl ? (
-                                  <img
-                                    src={materialForm.coverUrl}
-                                    alt=""
-                                    className="w-full h-full object-cover"
-                                    onError={e => {
-                                      e.currentTarget.style.display = 'none';
-                                    }}
-                                  />
-                                ) : (
-                                  <FileText className="w-8 h-8 text-blue-200" />
-                                )}
+                            <div className="grid gap-4 lg:grid-cols-[160px_1fr]">
+                              <div className="overflow-hidden rounded-xl border border-blue-100 bg-white">
+                                <div className="aspect-[4/3] flex items-center justify-center bg-white">
+                                  <CoverPreview src={editCoverPreviewUrl} />
+                                </div>
                               </div>
-                              <div className="min-w-0">
-                                <p className="font-semibold text-gray-900 line-clamp-2">{materialForm.title || selectedMaterial.title}</p>
-                                <p className="text-sm text-gray-600 mt-2 line-clamp-3">
-                                  {materialForm.previewText || materialForm.shortDescription || 'Текст предпросмотра появится здесь.'}
-                                </p>
-                                {materialForm.previewFileUrl && (
-                                  <a
-                                    href={materialForm.previewFileUrl}
-                                    target="_blank"
-                                    rel="noreferrer"
-                                    className="inline-flex mt-3 text-sm font-semibold text-blue-600 hover:text-blue-700"
-                                  >
-                                    Открыть превью
-                                  </a>
-                                )}
+                              <div className="space-y-3 min-w-0">
+                                <div>
+                                  <p className="font-semibold text-gray-900 line-clamp-2">{materialForm.title || selectedMaterial.title}</p>
+                                  <p className="text-sm text-gray-600 mt-2 line-clamp-3">
+                                    {materialForm.previewText || materialForm.shortDescription || 'Текст предпросмотра появится здесь.'}
+                                  </p>
+                                </div>
+                                <PreviewCard presentation={editPreviewPresentation} />
                               </div>
                             </div>
                           </div>
                         )}
 
                         <div className="md:col-span-2">
-                          <label className="block text-xs font-medium text-gray-600 mb-1">Полное описание</label>
+                          <label className="block text-xs font-medium text-gray-600 mb-1">РџРѕР»РЅРѕРµ РѕРїРёСЃР°РЅРёРµ</label>
                           <textarea
                             value={materialForm.fullDescription}
                             onChange={e => updateMaterialForm('fullDescription', e.target.value)}
@@ -1018,20 +1141,20 @@ export function MaterialFileManager() {
                         </div>
 
                         <div>
-                          <label className="block text-xs font-medium text-gray-600 mb-1">Тип доступа</label>
+                          <label className="block text-xs font-medium text-gray-600 mb-1">РўРёРї РґРѕСЃС‚СѓРїР°</label>
                           <select
                             value={materialForm.accessType}
                             onChange={e => updateMaterialForm('accessType', e.target.value as MaterialForm['accessType'])}
                             className="w-full px-3.5 py-2.5 border border-gray-300 rounded-xl text-sm bg-white outline-none focus:border-blue-400 focus:ring-2 focus:ring-blue-100"
                           >
-                            <option value="store">Магазин</option>
-                            <option value="free">Бесплатный</option>
-                            <option value="subscription">По подписке</option>
+                            <option value="store">РњР°РіР°Р·РёРЅ</option>
+                            <option value="free">Р‘РµСЃРїР»Р°С‚РЅС‹Р№</option>
+                            <option value="subscription">РџРѕ РїРѕРґРїРёСЃРєРµ</option>
                           </select>
                         </div>
 
                         <div>
-                          <label className="block text-xs font-medium text-gray-600 mb-1">Тип файла</label>
+                          <label className="block text-xs font-medium text-gray-600 mb-1">РўРёРї С„Р°Р№Р»Р°</label>
                           <select
                             value={materialForm.fileType}
                             onChange={e => updateMaterialForm('fileType', e.target.value as MaterialForm['fileType'])}
@@ -1045,7 +1168,7 @@ export function MaterialFileManager() {
                         </div>
 
                         <div>
-                          <label className="block text-xs font-medium text-gray-600 mb-1">Цена, ₽</label>
+                          <label className="block text-xs font-medium text-gray-600 mb-1">Р¦РµРЅР°, в‚Ѕ</label>
                           <input
                             type="number"
                             min={0}
@@ -1056,7 +1179,7 @@ export function MaterialFileManager() {
                             className="w-full px-3.5 py-2.5 border border-gray-300 rounded-xl text-sm outline-none focus:border-blue-400 focus:ring-2 focus:ring-blue-100 disabled:bg-gray-100 disabled:text-gray-400"
                           />
                           {materialForm.accessType !== 'store' && (
-                            <p className="text-xs text-gray-400 mt-1">Для бесплатных и подписочных материалов цена всегда 0 ₽.</p>
+                            <p className="text-xs text-gray-400 mt-1">Р”Р»СЏ Р±РµСЃРїР»Р°С‚РЅС‹С… Рё РїРѕРґРїРёСЃРѕС‡РЅС‹С… РјР°С‚РµСЂРёР°Р»РѕРІ С†РµРЅР° РІСЃРµРіРґР° 0 в‚Ѕ.</p>
                           )}
                         </div>
 
@@ -1068,7 +1191,7 @@ export function MaterialFileManager() {
                               onChange={e => updateMaterialForm('isPublished', e.target.checked)}
                               className="w-4 h-4 rounded border-gray-300 text-blue-600"
                             />
-                            Опубликован на сайте
+                            РћРїСѓР±Р»РёРєРѕРІР°РЅ РЅР° СЃР°Р№С‚Рµ
                           </label>
                           <label className="inline-flex items-center gap-2 text-sm text-gray-700">
                             <input
@@ -1077,12 +1200,12 @@ export function MaterialFileManager() {
                               onChange={e => updateMaterialForm('isFeatured', e.target.checked)}
                               className="w-4 h-4 rounded border-gray-300 text-blue-600"
                             />
-                            Избранный материал
+                            РР·Р±СЂР°РЅРЅС‹Р№ РјР°С‚РµСЂРёР°Р»
                           </label>
                         </div>
 
                         <div>
-                          <label className="block text-xs font-medium text-gray-600 mb-1">SEO-заголовок</label>
+                          <label className="block text-xs font-medium text-gray-600 mb-1">SEO-Р·Р°РіРѕР»РѕРІРѕРє</label>
                           <button
                             type="button"
                             onClick={() => {
@@ -1093,7 +1216,7 @@ export function MaterialFileManager() {
                             }}
                             className="mb-2 text-xs font-semibold text-blue-600 hover:text-blue-700"
                           >
-                            Заполнить SEO автоматически
+                            Р—Р°РїРѕР»РЅРёС‚СЊ SEO Р°РІС‚РѕРјР°С‚РёС‡РµСЃРєРё
                           </button>
                           <input
                             value={materialForm.seoTitle}
@@ -1104,7 +1227,7 @@ export function MaterialFileManager() {
                         </div>
 
                         <div>
-                          <label className="block text-xs font-medium text-gray-600 mb-1">SEO-описание</label>
+                          <label className="block text-xs font-medium text-gray-600 mb-1">SEO-РѕРїРёСЃР°РЅРёРµ</label>
                           <input
                             value={materialForm.seoDescription}
                             onChange={e => updateMaterialForm('seoDescription', e.target.value)}
@@ -1123,13 +1246,13 @@ export function MaterialFileManager() {
                             className="mt-0.5 w-4 h-4 rounded border-amber-300 text-amber-600"
                           />
                           <span>
-                            Я понимаю, что меняю видимость материала на сайте.
+                            РЇ РїРѕРЅРёРјР°СЋ, С‡С‚Рѕ РјРµРЅСЏСЋ РІРёРґРёРјРѕСЃС‚СЊ РјР°С‚РµСЂРёР°Р»Р° РЅР° СЃР°Р№С‚Рµ.
                           </span>
                         </label>
                       )}
 
                       <div className="rounded-xl border border-green-100 bg-green-50 px-4 py-3 text-xs text-green-800">
-                        Защита включена: сохраняет только администратор, slug нельзя случайно изменить, каждое сохранение пишется в журнал изменений.
+                        Р—Р°С‰РёС‚Р° РІРєР»СЋС‡РµРЅР°: СЃРѕС…СЂР°РЅСЏРµС‚ С‚РѕР»СЊРєРѕ Р°РґРјРёРЅРёСЃС‚СЂР°С‚РѕСЂ, slug РЅРµР»СЊР·СЏ СЃР»СѓС‡Р°Р№РЅРѕ РёР·РјРµРЅРёС‚СЊ, РєР°Р¶РґРѕРµ СЃРѕС…СЂР°РЅРµРЅРёРµ РїРёС€РµС‚СЃСЏ РІ Р¶СѓСЂРЅР°Р» РёР·РјРµРЅРµРЅРёР№.
                       </div>
 
                       {saveError && (
@@ -1151,18 +1274,18 @@ export function MaterialFileManager() {
                         className="inline-flex items-center gap-2 px-5 py-2.5 bg-gray-900 hover:bg-gray-800 text-white text-sm font-semibold rounded-xl transition-colors disabled:opacity-50"
                       >
                         {saveLoading ? <Loader2 className="w-4 h-4 animate-spin" /> : <CheckCircle2 className="w-4 h-4" />}
-                        {saveLoading ? 'Сохранение...' : 'Сохранить изменения'}
+                        {saveLoading ? 'РЎРѕС…СЂР°РЅРµРЅРёРµ...' : 'РЎРѕС…СЂР°РЅРёС‚СЊ РёР·РјРµРЅРµРЅРёСЏ'}
                       </button>
                     </form>
                   )}
 
                   <div>
                     <p className="text-xs font-semibold text-gray-500 uppercase tracking-wide mb-3">
-                      Подключённые файлы ({files.length})
+                      РџРѕРґРєР»СЋС‡С‘РЅРЅС‹Рµ С„Р°Р№Р»С‹ ({files.length})
                     </p>
                     {files.length === 0 ? (
                       <div className="rounded-xl border border-dashed border-gray-200 px-4 py-6 text-sm text-gray-400">
-                        У этого материала пока нет файлов.
+                        РЈ СЌС‚РѕРіРѕ РјР°С‚РµСЂРёР°Р»Р° РїРѕРєР° РЅРµС‚ С„Р°Р№Р»РѕРІ.
                       </div>
                     ) : (
                       <div className="space-y-2">
@@ -1185,24 +1308,24 @@ export function MaterialFileManager() {
                   <div className="rounded-2xl border border-blue-100 bg-blue-50/40 p-4">
                     <div className="flex items-center gap-2 mb-3">
                       <Upload className="w-4 h-4 text-blue-500" />
-                      <p className="text-sm font-semibold text-gray-800">Загрузить файл</p>
+                      <p className="text-sm font-semibold text-gray-800">Р—Р°РіСЂСѓР·РёС‚СЊ С„Р°Р№Р»</p>
                     </div>
                     <form onSubmit={handleUpload} className="space-y-3">
                       <div>
-                        <label className="block text-xs font-medium text-gray-600 mb-1">Тип файла</label>
+                        <label className="block text-xs font-medium text-gray-600 mb-1">РўРёРї С„Р°Р№Р»Р°</label>
                         <select
                           value={uploadRole}
                           onChange={e => setUploadRole(e.target.value as FileRole)}
                           disabled={uploadLoading}
                           className="w-full px-3.5 py-2.5 border border-gray-300 rounded-xl text-sm bg-white outline-none focus:border-blue-400 focus:ring-2 focus:ring-blue-100 disabled:opacity-60"
                         >
-                          <option value="paid">Основной файл для скачивания</option>
-                          <option value="preview">Превью для просмотра</option>
-                          <option value="cover">Обложка</option>
+                          <option value="paid">РћСЃРЅРѕРІРЅРѕР№ С„Р°Р№Р» РґР»СЏ СЃРєР°С‡РёРІР°РЅРёСЏ</option>
+                          <option value="preview">РџСЂРµРІСЊСЋ РґР»СЏ РїСЂРѕСЃРјРѕС‚СЂР°</option>
+                          <option value="cover">РћР±Р»РѕР¶РєР°</option>
                         </select>
                       </div>
                       <div>
-                        <label className="block text-xs font-medium text-gray-600 mb-1">Файл с компьютера</label>
+                        <label className="block text-xs font-medium text-gray-600 mb-1">Р¤Р°Р№Р» СЃ РєРѕРјРїСЊСЋС‚РµСЂР°</label>
                         <input
                           key={uploadSuccess}
                           type="file"
@@ -1229,7 +1352,7 @@ export function MaterialFileManager() {
                         className="inline-flex items-center gap-2 px-5 py-2.5 bg-blue-500 hover:bg-blue-600 text-white text-sm font-semibold rounded-xl transition-colors disabled:opacity-50"
                       >
                         {uploadLoading ? <Loader2 className="w-4 h-4 animate-spin" /> : <Upload className="w-4 h-4" />}
-                        {uploadLoading ? 'Загрузка...' : 'Загрузить и подключить'}
+                        {uploadLoading ? 'Р—Р°РіСЂСѓР·РєР°...' : 'Р—Р°РіСЂСѓР·РёС‚СЊ Рё РїРѕРґРєР»СЋС‡РёС‚СЊ'}
                       </button>
                     </form>
                   </div>
@@ -1241,7 +1364,7 @@ export function MaterialFileManager() {
                       className="inline-flex items-center gap-2 text-sm font-semibold text-gray-600 hover:text-gray-900"
                     >
                       <FilePlus className="w-4 h-4" />
-                      Подключить файл по адресу
+                      РџРѕРґРєР»СЋС‡РёС‚СЊ С„Р°Р№Р» РїРѕ Р°РґСЂРµСЃСѓ
                     </button>
                     {manualOpen && (
                       <form onSubmit={handleManualRegister} className="mt-3 space-y-3">
@@ -1250,9 +1373,9 @@ export function MaterialFileManager() {
                           onChange={e => setManualRole(e.target.value as FileRole)}
                           className="w-full px-3.5 py-2.5 border border-gray-300 rounded-xl text-sm bg-white"
                         >
-                          <option value="paid">Основной файл</option>
-                          <option value="preview">Превью</option>
-                          <option value="cover">Обложка</option>
+                          <option value="paid">РћСЃРЅРѕРІРЅРѕР№ С„Р°Р№Р»</option>
+                          <option value="preview">РџСЂРµРІСЊСЋ</option>
+                          <option value="cover">РћР±Р»РѕР¶РєР°</option>
                         </select>
                         <input
                           value={manualKey}
@@ -1263,7 +1386,7 @@ export function MaterialFileManager() {
                         <input
                           value={manualSize}
                           onChange={e => setManualSize(e.target.value)}
-                          placeholder="Размер файла в байтах, необязательно"
+                          placeholder="Р Р°Р·РјРµСЂ С„Р°Р№Р»Р° РІ Р±Р°Р№С‚Р°С…, РЅРµРѕР±СЏР·Р°С‚РµР»СЊРЅРѕ"
                           className="w-full px-3.5 py-2.5 border border-gray-300 rounded-xl text-sm"
                         />
                         {manualError && <p className="text-sm text-red-600">{manualError}</p>}
@@ -1274,7 +1397,7 @@ export function MaterialFileManager() {
                           className="inline-flex items-center gap-2 px-4 py-2 bg-gray-900 hover:bg-gray-800 text-white text-sm font-semibold rounded-xl disabled:opacity-50"
                         >
                           {manualLoading ? <Loader2 className="w-4 h-4 animate-spin" /> : <FilePlus className="w-4 h-4" />}
-                          Подключить
+                          РџРѕРґРєР»СЋС‡РёС‚СЊ
                         </button>
                       </form>
                     )}

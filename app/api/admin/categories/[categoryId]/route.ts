@@ -1,11 +1,16 @@
 import { NextResponse } from 'next/server';
 import { getCurrentUser } from '@/src/server/auth';
-import { query } from '@/src/server/db';
+import { query, withTransaction } from '@/src/server/db';
 import {
   consumeRequestRateLimit,
   rateLimitResponse,
   requireTrustedOrigin,
 } from '@/src/server/security';
+import {
+  categoryToPublic,
+  clampCategorySortOrder,
+  normalizeCategorySortOrders,
+} from '@/src/server/categorySort';
 
 export const dynamic = 'force-dynamic';
 
@@ -18,24 +23,6 @@ async function requireAdmin() {
   if (!user) return { user: null, error: NextResponse.json({ error: 'Unauthorized' }, { status: 401 }) };
   if (!user.isAdmin) return { user: null, error: NextResponse.json({ error: 'Forbidden' }, { status: 403 }) };
   return { user, error: null };
-}
-
-function publicCategory(row: {
-  id: string;
-  slug: string;
-  name: string;
-  description: string;
-  is_visible: boolean;
-  sort_order: number | string;
-}) {
-  return {
-    id: row.id,
-    slug: row.slug,
-    name: row.name,
-    description: row.description,
-    isVisible: row.is_visible,
-    sortOrder: Number(row.sort_order ?? 0),
-  };
 }
 
 export async function PATCH(request: Request, { params }: Params) {
@@ -92,16 +79,66 @@ export async function PATCH(request: Request, { params }: Params) {
       return NextResponse.json({ error: 'Раздел не найден' }, { status: 404 });
     }
 
-    const afterResult = await query<typeof beforeResult.rows[0]>(
-      `UPDATE categories
-       SET name = $2,
-           description = $3,
-           is_visible = $4,
-           sort_order = $5
-       WHERE id = $1
-       RETURNING id, slug, name, description, is_visible, sort_order`,
-      [categoryId, name, description, isVisible, sortOrder]
-    );
+    const after = await withTransaction(async client => {
+      await normalizeCategorySortOrders(client);
+
+      const currentRow = await client.query<typeof beforeResult.rows[0]>(
+        `SELECT id, slug, name, description, is_visible, sort_order
+         FROM categories
+         WHERE id = $1
+         LIMIT 1`,
+        [categoryId]
+      );
+      const current = currentRow.rows[0];
+      if (!current) {
+        throw new Error('CATEGORY_NOT_FOUND');
+      }
+
+      const currentOrder = Number(current.sort_order ?? 1);
+      const nextSortOrder = await clampCategorySortOrder(client, sortOrder, false);
+
+      if (nextSortOrder < currentOrder) {
+        await client.query(
+          `UPDATE categories
+           SET sort_order = sort_order + 1
+           WHERE sort_order >= $1
+             AND sort_order < $2
+             AND id <> $3`,
+          [nextSortOrder, currentOrder, categoryId]
+        );
+      } else if (nextSortOrder > currentOrder) {
+        await client.query(
+          `UPDATE categories
+           SET sort_order = sort_order - 1
+           WHERE sort_order <= $1
+             AND sort_order > $2
+             AND id <> $3`,
+          [nextSortOrder, currentOrder, categoryId]
+        );
+      }
+
+      const afterResult = await client.query<typeof beforeResult.rows[0]>(
+        `UPDATE categories
+         SET name = $2,
+             description = $3,
+             is_visible = $4,
+             sort_order = $5
+         WHERE id = $1
+         RETURNING id, slug, name, description, is_visible, sort_order`,
+        [categoryId, name, description, isVisible, nextSortOrder]
+      );
+
+      return afterResult.rows[0];
+    }).catch(error => {
+      if (error instanceof Error && error.message === 'CATEGORY_NOT_FOUND') {
+        return null;
+      }
+      throw error;
+    });
+
+    if (!after) {
+      return NextResponse.json({ error: 'Р Р°Р·РґРµР» РЅРµ РЅР°Р№РґРµРЅ' }, { status: 404 });
+    }
 
     await query(
       `INSERT INTO admin_audit_log (admin_id, action, target_type, target_id, before_data, after_data)
@@ -109,12 +146,12 @@ export async function PATCH(request: Request, { params }: Params) {
       [
         user!.id,
         categoryId,
-        JSON.stringify(publicCategory(beforeResult.rows[0])),
-        JSON.stringify(publicCategory(afterResult.rows[0])),
+        JSON.stringify(categoryToPublic(beforeResult.rows[0])),
+        JSON.stringify(categoryToPublic(after)),
       ]
     );
 
-    return NextResponse.json({ ok: true, category: publicCategory(afterResult.rows[0]) });
+    return NextResponse.json({ ok: true, category: categoryToPublic(after) });
   } catch (err) {
     console.error('[api/admin/categories/:categoryId PATCH]', err instanceof Error ? err.message : String(err));
     return NextResponse.json({ error: 'Internal server error' }, { status: 500 });

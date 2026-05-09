@@ -172,8 +172,8 @@ export async function GET(request: Request) {
     const { searchParams } = new URL(request.url);
     const search = (searchParams.get('search') ?? '').trim();
     const accessType = (searchParams.get('accessType') ?? 'all').trim();
-    const limitParam = parseInt(searchParams.get('limit') ?? '80', 10);
-    const limit = Number.isFinite(limitParam) ? Math.min(Math.max(limitParam, 1), 150) : 80;
+    const limitParam = parseInt(searchParams.get('limit') ?? '300', 10);
+    const limit = Number.isFinite(limitParam) ? Math.min(Math.max(limitParam, 1), 500) : 300;
 
     const values: unknown[] = [];
     const where: string[] = [];
@@ -205,7 +205,7 @@ export async function GET(request: Request) {
       LEFT JOIN material_files mf ON mf.material_id = m.id
       ${where.length ? `WHERE ${where.join(' AND ')}` : ''}
       GROUP BY m.id, c.name
-      ORDER BY m.is_published DESC, m.title ASC
+      ORDER BY m.updated_at DESC, m.title ASC
       LIMIT $${values.length}
     `;
 

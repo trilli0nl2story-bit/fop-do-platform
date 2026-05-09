@@ -1,11 +1,16 @@
 import { NextResponse } from 'next/server';
 import { getCurrentUser } from '@/src/server/auth';
-import { query } from '@/src/server/db';
+import { query, withTransaction } from '@/src/server/db';
 import {
   consumeRequestRateLimit,
   rateLimitResponse,
   requireTrustedOrigin,
 } from '@/src/server/security';
+import {
+  categoryToPublic,
+  clampCategorySortOrder,
+  normalizeCategorySortOrders,
+} from '@/src/server/categorySort';
 
 export const dynamic = 'force-dynamic';
 
@@ -69,14 +74,7 @@ export async function GET() {
     );
 
     return NextResponse.json({
-      categories: result.rows.map(row => ({
-        id: row.id,
-        slug: row.slug,
-        name: row.name,
-        description: row.description,
-        isVisible: row.is_visible,
-        sortOrder: Number(row.sort_order ?? 0),
-      })),
+      categories: result.rows.map(categoryToPublic),
     });
   } catch (err) {
     console.error('[api/admin/categories]', err instanceof Error ? err.message : String(err));
@@ -116,28 +114,33 @@ export async function POST(request: Request) {
     }
 
     const slug = await makeUniqueSlug(name);
-    const result = await query<{
-      id: string;
-      slug: string;
-      name: string;
-      description: string;
-      is_visible: boolean;
-      sort_order: number | string;
-    }>(
-      `INSERT INTO categories (slug, name, description, is_visible, sort_order)
-       VALUES ($1, $2, $3, $4, $5)
-       RETURNING id, slug, name, description, is_visible, sort_order`,
-      [slug, name, description, isVisible, sortOrder]
-    );
+    const category = await withTransaction(async client => {
+      await normalizeCategorySortOrders(client);
+      const nextSortOrder = await clampCategorySortOrder(client, sortOrder, true);
 
-    const category = {
-      id: result.rows[0].id,
-      slug: result.rows[0].slug,
-      name: result.rows[0].name,
-      description: result.rows[0].description,
-      isVisible: result.rows[0].is_visible,
-      sortOrder: Number(result.rows[0].sort_order ?? 0),
-    };
+      await client.query(
+        `UPDATE categories
+         SET sort_order = sort_order + 1
+         WHERE sort_order >= $1`,
+        [nextSortOrder]
+      );
+
+      const result = await client.query<{
+        id: string;
+        slug: string;
+        name: string;
+        description: string;
+        is_visible: boolean;
+        sort_order: number | string;
+      }>(
+        `INSERT INTO categories (slug, name, description, is_visible, sort_order)
+         VALUES ($1, $2, $3, $4, $5)
+         RETURNING id, slug, name, description, is_visible, sort_order`,
+        [slug, name, description, isVisible, nextSortOrder]
+      );
+
+      return categoryToPublic(result.rows[0]);
+    });
 
     await query(
       `INSERT INTO admin_audit_log (admin_id, action, target_type, target_id, before_data, after_data)
