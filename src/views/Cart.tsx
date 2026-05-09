@@ -127,6 +127,8 @@ export function Cart({ onNavigate, isAuthenticated }: CartProps) {
   });
 
   const hasUnavailableItems = displayItems.some((item) => item.quote && !item.quote.available);
+  const allItemsHaveSlugs = items.every((item) => (item.slug?.trim() ?? '').length > 0);
+  const checkoutReady = allItemsHaveSlugs && (quote ? quote.checkoutReady : true) && !hasUnavailableItems;
 
   const handleApplyReferral = () => {
     setReferralCode(referralDraft.trim());
@@ -210,7 +212,7 @@ export function Cart({ onNavigate, isAuthenticated }: CartProps) {
 
           {quoteError && (
             <div className="rounded-xl border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-800">
-              {quoteError}
+              {quoteError} Итог всё равно будет проверен на сервере перед оплатой.
             </div>
           )}
 
@@ -360,9 +362,7 @@ export function Cart({ onNavigate, isAuthenticated }: CartProps) {
               onClick={handleCheckout}
               disabled={
                 checkoutLoading ||
-                quoteLoading ||
-                !quote?.checkoutReady ||
-                hasUnavailableItems
+                !checkoutReady
               }
             >
               <CreditCard className="w-5 h-5" />
