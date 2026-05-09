@@ -46,7 +46,7 @@ export async function POST(request: Request) {
     body = (await request.json()) as CreateAuthorApplicationBody;
   } catch {
     return NextResponse.json(
-      { error: 'invalid_json', message: 'РќРµ СѓРґР°Р»РѕСЃСЊ РїСЂРѕС‡РёС‚Р°С‚СЊ Р·Р°СЏРІРєСѓ. РћР±РЅРѕРІРёС‚Рµ СЃС‚СЂР°РЅРёС†Сѓ Рё РїРѕРїСЂРѕР±СѓР№С‚Рµ РµС‰С‘ СЂР°Р·.' },
+      { error: 'invalid_json', message: 'Не удалось прочитать заявку. Обновите страницу и попробуйте ещё раз.' },
       { status: 400 }
     );
   }
@@ -64,42 +64,42 @@ export async function POST(request: Request) {
 
   if (!name) {
     return NextResponse.json(
-      { error: 'missing_name', message: 'РЈРєР°Р¶РёС‚Рµ РёРјСЏ Рё С„Р°РјРёР»РёСЋ.' },
+      { error: 'missing_name', message: 'Укажите имя и фамилию.' },
       { status: 400 }
     );
   }
 
   if (!email || !isValidEmail(email)) {
     return NextResponse.json(
-      { error: 'invalid_email', message: 'РЈРєР°Р¶РёС‚Рµ РєРѕСЂСЂРµРєС‚РЅС‹Р№ email.' },
+      { error: 'invalid_email', message: 'Укажите корректный email.' },
       { status: 400 }
     );
   }
 
   if (!position) {
     return NextResponse.json(
-      { error: 'missing_position', message: 'РЈРєР°Р¶РёС‚Рµ РґРѕР»Р¶РЅРѕСЃС‚СЊ РёР»Рё СЂРѕР»СЊ.' },
+      { error: 'missing_position', message: 'Укажите должность или роль.' },
       { status: 400 }
     );
   }
 
   if (!bio) {
     return NextResponse.json(
-      { error: 'missing_bio', message: 'Р Р°СЃСЃРєР°Р¶РёС‚Рµ РЅРµРјРЅРѕРіРѕ Рѕ СЃРµР±Рµ Рё Рѕ РјР°С‚РµСЂРёР°Р»Р°С…, РєРѕС‚РѕСЂС‹Рµ С…РѕС‚РёС‚Рµ РїСѓР±Р»РёРєРѕРІР°С‚СЊ.' },
+      { error: 'missing_bio', message: 'Расскажите немного о себе и о материалах, которые хотите публиковать.' },
       { status: 400 }
     );
   }
 
   if (!['self_employed', 'individual_entrepreneur'].includes(employmentType)) {
     return NextResponse.json(
-      { error: 'invalid_employment_type', message: 'Р’С‹Р±РµСЂРёС‚Рµ СЃС‚Р°С‚СѓСЃ Р·Р°РЅСЏС‚РѕСЃС‚Рё.' },
+      { error: 'invalid_employment_type', message: 'Выберите статус занятости.' },
       { status: 400 }
     );
   }
 
   if (!isValidOptionalUrl(sampleUrl)) {
     return NextResponse.json(
-      { error: 'invalid_sample_url', message: 'РЎСЃС‹Р»РєР° РЅР° РїСЂРёРјРµСЂ РјР°С‚РµСЂРёР°Р»Р° РґРѕР»Р¶РЅР° РЅР°С‡РёРЅР°С‚СЊСЃСЏ СЃ http://, https:// РёР»Рё /' },
+      { error: 'invalid_sample_url', message: 'Ссылка на пример материала должна начинаться с http://, https:// или /' },
       { status: 400 }
     );
   }
@@ -120,7 +120,7 @@ export async function POST(request: Request) {
   if (!rateLimit.allowed) {
     return rateLimitResponse(
       rateLimit,
-      'РЎР»РёС€РєРѕРј РјРЅРѕРіРѕ Р·Р°СЏРІРѕРє Р·Р° РєРѕСЂРѕС‚РєРѕРµ РІСЂРµРјСЏ. РџРѕРґРѕР¶РґРёС‚Рµ РЅРµРјРЅРѕРіРѕ Рё РїРѕРїСЂРѕР±СѓР№С‚Рµ СЃРЅРѕРІР°.'
+      'Слишком много заявок за короткое время. Подождите немного и попробуйте снова.'
     );
   }
 
@@ -178,12 +178,12 @@ export async function POST(request: Request) {
         status: row.status,
         createdAt: new Date(row.created_at).toISOString(),
       },
-      message: 'Р—Р°СЏРІРєР° Р°РІС‚РѕСЂР° РїСЂРёРЅСЏС‚Р°. РњС‹ СЃРІСЏР¶РµРјСЃСЏ СЃ РІР°РјРё РїРѕСЃР»Рµ СЂР°СЃСЃРјРѕС‚СЂРµРЅРёСЏ.',
+      message: 'Заявка автора принята. Мы свяжемся с вами после рассмотрения.',
     });
   } catch (error) {
     console.error('[api/author-applications]', error instanceof Error ? error.message : String(error));
     return NextResponse.json(
-      { error: 'internal_error', message: 'РќРµ СѓРґР°Р»РѕСЃСЊ РѕС‚РїСЂР°РІРёС‚СЊ Р·Р°СЏРІРєСѓ Р°РІС‚РѕСЂР°. РџРѕРїСЂРѕР±СѓР№С‚Рµ РµС‰С‘ СЂР°Р·.' },
+      { error: 'internal_error', message: 'Не удалось отправить заявку автора. Попробуйте ещё раз.' },
       { status: 500 }
     );
   }

@@ -137,7 +137,7 @@ export async function PATCH(request: Request, { params }: Params) {
     });
 
     if (!after) {
-      return NextResponse.json({ error: 'Р Р°Р·РґРµР» РЅРµ РЅР°Р№РґРµРЅ' }, { status: 404 });
+      return NextResponse.json({ error: 'Раздел не найден' }, { status: 404 });
     }
 
     await query(

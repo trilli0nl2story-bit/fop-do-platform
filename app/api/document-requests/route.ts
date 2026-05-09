@@ -39,7 +39,7 @@ export async function POST(request: Request) {
     body = (await request.json()) as CreateDocumentRequestBody;
   } catch {
     return NextResponse.json(
-      { error: 'invalid_json', message: 'РќРµ СѓРґР°Р»РѕСЃСЊ РїСЂРѕС‡РёС‚Р°С‚СЊ Р·Р°СЏРІРєСѓ. РћР±РЅРѕРІРёС‚Рµ СЃС‚СЂР°РЅРёС†Сѓ Рё РїРѕРїСЂРѕР±СѓР№С‚Рµ РµС‰С‘ СЂР°Р·.' },
+      { error: 'invalid_json', message: 'Не удалось прочитать заявку. Обновите страницу и попробуйте ещё раз.' },
       { status: 400 }
     );
   }
@@ -54,21 +54,21 @@ export async function POST(request: Request) {
 
   if (!email || !isValidEmail(email)) {
     return NextResponse.json(
-      { error: 'invalid_email', message: 'РЈРєР°Р¶РёС‚Рµ РєРѕСЂСЂРµРєС‚РЅС‹Р№ email РґР»СЏ СЃРІСЏР·Рё РїРѕ Р·Р°СЏРІРєРµ.' },
+      { error: 'invalid_email', message: 'Укажите корректный email для связи по заявке.' },
       { status: 400 }
     );
   }
 
   if (!topic) {
     return NextResponse.json(
-      { error: 'missing_topic', message: 'РЈРєР°Р¶РёС‚Рµ С‚РµРјСѓ РјР°С‚РµСЂРёР°Р»Р°.' },
+      { error: 'missing_topic', message: 'Укажите тему материала.' },
       { status: 400 }
     );
   }
 
   if (!description) {
     return NextResponse.json(
-      { error: 'missing_description', message: 'РћРїРёС€РёС‚Рµ, РєР°РєРѕР№ РґРѕРєСѓРјРµРЅС‚ РЅСѓР¶РµРЅ Рё С‡С‚Рѕ РІ РЅС‘Рј РІР°Р¶РЅРѕ.' },
+      { error: 'missing_description', message: 'Опишите, какой документ нужен и что в нём важно.' },
       { status: 400 }
     );
   }
@@ -89,11 +89,11 @@ export async function POST(request: Request) {
   if (!rateLimit.allowed) {
     return rateLimitResponse(
       rateLimit,
-      'РЎР»РёС€РєРѕРј РјРЅРѕРіРѕ Р·Р°СЏРІРѕРє Р·Р° РєРѕСЂРѕС‚РєРѕРµ РІСЂРµРјСЏ. РџРѕРґРѕР¶РґРёС‚Рµ РЅРµРјРЅРѕРіРѕ Рё РїРѕРїСЂРѕР±СѓР№С‚Рµ СЃРЅРѕРІР°.'
+      'Слишком много заявок за короткое время. Подождите немного и попробуйте снова.'
     );
   }
 
-  const fullDescription = [`РўРµРјР°: ${topic}`, description].join('\n\n');
+  const fullDescription = [`Тема: ${topic}`, description].join('\n\n');
   const consentMeta = buildConsentMeta(request);
 
   try {
@@ -143,13 +143,13 @@ export async function POST(request: Request) {
         createdAt: new Date(row.created_at).toISOString(),
       },
       message: sessionUser
-        ? 'Р—Р°СЏРІРєР° РїСЂРёРЅСЏС‚Р°. РћРЅР° РїРѕСЏРІРёС‚СЃСЏ РІ РІР°С€РµРј РєР°Р±РёРЅРµС‚Рµ.'
-        : 'Р—Р°СЏРІРєР° РїСЂРёРЅСЏС‚Р°. РњС‹ СЃРІСЏР¶РµРјСЃСЏ СЃ РІР°РјРё РїРѕ СѓРєР°Р·Р°РЅРЅРѕРјСѓ email.',
+        ? 'Заявка принята. Она появится в вашем кабинете.'
+        : 'Заявка принята. Мы свяжемся с вами по указанному email.',
     });
   } catch (error) {
     console.error('[api/document-requests]', error instanceof Error ? error.message : String(error));
     return NextResponse.json(
-      { error: 'internal_error', message: 'РќРµ СѓРґР°Р»РѕСЃСЊ РѕС‚РїСЂР°РІРёС‚СЊ Р·Р°СЏРІРєСѓ. РџРѕРїСЂРѕР±СѓР№С‚Рµ РµС‰С‘ СЂР°Р·.' },
+      { error: 'internal_error', message: 'Не удалось отправить заявку. Попробуйте ещё раз.' },
       { status: 500 }
     );
   }

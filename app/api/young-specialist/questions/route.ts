@@ -90,7 +90,7 @@ export async function POST(request: Request) {
     body = (await request.json()) as CreateYoungSpecialistBody;
   } catch {
     return NextResponse.json(
-      { error: 'invalid_json', message: 'РќРµ СѓРґР°Р»РѕСЃСЊ РїСЂРѕС‡РёС‚Р°С‚СЊ РІРѕРїСЂРѕСЃ. РћР±РЅРѕРІРёС‚Рµ СЃС‚СЂР°РЅРёС†Сѓ Рё РїРѕРїСЂРѕР±СѓР№С‚Рµ РµС‰С‘ СЂР°Р·.' },
+      { error: 'invalid_json', message: 'Не удалось прочитать вопрос. Обновите страницу и попробуйте ещё раз.' },
       { status: 400 }
     );
   }
@@ -110,35 +110,35 @@ export async function POST(request: Request) {
 
   if (!name) {
     return NextResponse.json(
-      { error: 'missing_name', message: 'РЈРєР°Р¶РёС‚Рµ РёРјСЏ.' },
+      { error: 'missing_name', message: 'Укажите имя.' },
       { status: 400 }
     );
   }
 
   if (!email || !isValidEmail(email)) {
     return NextResponse.json(
-      { error: 'invalid_email', message: 'РЈРєР°Р¶РёС‚Рµ РєРѕСЂСЂРµРєС‚РЅС‹Р№ email.' },
+      { error: 'invalid_email', message: 'Укажите корректный email.' },
       { status: 400 }
     );
   }
 
   if (!position) {
     return NextResponse.json(
-      { error: 'missing_position', message: 'РЈРєР°Р¶РёС‚Рµ РґРѕР»Р¶РЅРѕСЃС‚СЊ.' },
+      { error: 'missing_position', message: 'Укажите должность.' },
       { status: 400 }
     );
   }
 
   if (!topic) {
     return NextResponse.json(
-      { error: 'missing_topic', message: 'РЈРєР°Р¶РёС‚Рµ С‚РµРјСѓ РІРѕРїСЂРѕСЃР°.' },
+      { error: 'missing_topic', message: 'Укажите тему вопроса.' },
       { status: 400 }
     );
   }
 
   if (!question) {
     return NextResponse.json(
-      { error: 'missing_question', message: 'РћРїРёС€РёС‚Рµ РІР°С€ РІРѕРїСЂРѕСЃ.' },
+      { error: 'missing_question', message: 'Опишите ваш вопрос.' },
       { status: 400 }
     );
   }
@@ -154,21 +154,21 @@ export async function POST(request: Request) {
 
   if (body.age !== undefined && body.age !== null && body.age !== '' && age === null) {
     return NextResponse.json(
-      { error: 'invalid_age', message: 'Р’РѕР·СЂР°СЃС‚ СѓРєР°Р¶РёС‚Рµ С‡РёСЃР»РѕРј РѕС‚ 18 РґРѕ 90.' },
+      { error: 'invalid_age', message: 'Возраст укажите числом от 18 до 90.' },
       { status: 400 }
     );
   }
 
   if (vkLink === null) {
     return NextResponse.json(
-      { error: 'invalid_vk_link', message: 'РЎСЃС‹Р»РєР° VK РґРѕР»Р¶РЅР° РЅР°С‡РёРЅР°С‚СЊСЃСЏ СЃ http:// РёР»Рё https://.' },
+      { error: 'invalid_vk_link', message: 'Ссылка VK должна начинаться с http:// или https://.' },
       { status: 400 }
     );
   }
 
   if (telegramLink === null) {
     return NextResponse.json(
-      { error: 'invalid_telegram_link', message: 'РЎСЃС‹Р»РєР° Telegram РґРѕР»Р¶РЅР° РЅР°С‡РёРЅР°С‚СЊСЃСЏ СЃ http:// РёР»Рё https://.' },
+      { error: 'invalid_telegram_link', message: 'Ссылка Telegram должна начинаться с http:// или https://.' },
       { status: 400 }
     );
   }
@@ -182,7 +182,7 @@ export async function POST(request: Request) {
   if (!rateLimit.allowed) {
     return rateLimitResponse(
       rateLimit,
-      'РЎР»РёС€РєРѕРј РјРЅРѕРіРѕ РІРѕРїСЂРѕСЃРѕРІ Р·Р° РєРѕСЂРѕС‚РєРѕРµ РІСЂРµРјСЏ. РџРѕРґРѕР¶РґРёС‚Рµ РЅРµРјРЅРѕРіРѕ Рё РїРѕРїСЂРѕР±СѓР№С‚Рµ СЃРЅРѕРІР°.'
+      'Слишком много вопросов за короткое время. Подождите немного и попробуйте снова.'
     );
   }
 
@@ -250,12 +250,12 @@ export async function POST(request: Request) {
         status: row.status,
         createdAt: new Date(row.created_at).toISOString(),
       },
-      message: 'Р’РѕРїСЂРѕСЃ РїСЂРёРЅСЏС‚. РњС‹ РїРµСЂРµРґР°РґРёРј РµРіРѕ СЌРєСЃРїРµСЂС‚Сѓ Рё СЃРѕС…СЂР°РЅРёРј РЅРѕРјРµСЂ РѕР±СЂР°С‰РµРЅРёСЏ.',
+      message: 'Вопрос принят. Мы передадим его эксперту и сохраним номер обращения.',
     });
   } catch (error) {
     console.error('[api/young-specialist/questions]', error instanceof Error ? error.message : String(error));
     return NextResponse.json(
-      { error: 'internal_error', message: 'РќРµ СѓРґР°Р»РѕСЃСЊ РѕС‚РїСЂР°РІРёС‚СЊ РІРѕРїСЂРѕСЃ. РџРѕРїСЂРѕР±СѓР№С‚Рµ РµС‰С‘ СЂР°Р·.' },
+      { error: 'internal_error', message: 'Не удалось отправить вопрос. Попробуйте ещё раз.' },
       { status: 500 }
     );
   }
