@@ -1,12 +1,16 @@
 ﻿import { NextResponse } from 'next/server';
 import { getCurrentUser } from '@/src/server/auth';
-import { query } from '@/src/server/db';
+import { withTransaction } from '@/src/server/db';
 import {
   consumeRequestRateLimit,
   rateLimitResponse,
   requireTrustedOrigin,
 } from '@/src/server/security';
-import { buildConsentMeta, ensureConsentColumns } from '@/src/server/publicFormConsent';
+import {
+  buildConsentMeta,
+  ensureConsentColumns,
+  recordPublicFormPersonalDataConsent,
+} from '@/src/server/publicFormConsent';
 
 export const dynamic = 'force-dynamic';
 
@@ -98,42 +102,62 @@ export async function POST(request: Request) {
 
   try {
     await ensureConsentColumns('document_requests');
-    const result = await query<{ id: string; status: string; created_at: string }>(
-      `
-        INSERT INTO document_requests (
-          user_id,
+    const row = await withTransaction(async (client) => {
+      const result = await client.query<{ id: string; status: string; created_at: string }>(
+        `
+          INSERT INTO document_requests (
+            user_id,
+            email,
+            name,
+            description,
+            age_group,
+            document_type,
+            consent_accepted_at,
+            consent_ip,
+            consent_user_agent,
+            status,
+            created_at,
+            updated_at
+          )
+          VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, 'received', now(), now())
+          RETURNING id, status, created_at
+        `,
+        [
+          sessionUser?.id ?? null,
           email,
           name,
-          description,
-          age_group,
-          document_type,
-          consent_accepted_at,
-          consent_ip,
-          consent_user_agent,
-          status,
-          created_at,
-          updated_at
-        )
-        VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, 'received', now(), now())
-        RETURNING id, status, created_at
-      `,
-      [
-        sessionUser?.id ?? null,
-        email,
-        name,
-        fullDescription,
-        ageGroup,
-        documentType,
-        consentMeta.acceptedAt,
-        consentMeta.ip,
-        consentMeta.userAgent,
-      ]
-    );
+          fullDescription,
+          ageGroup,
+          documentType,
+          consentMeta.acceptedAt,
+          consentMeta.ip,
+          consentMeta.userAgent,
+        ]
+      );
 
-    const row = result.rows[0];
-    if (!row) {
-      throw new Error('document_request_not_created');
-    }
+      const created = result.rows[0];
+      if (!created) {
+        throw new Error('document_request_not_created');
+      }
+
+      await recordPublicFormPersonalDataConsent(
+        {
+          userId: sessionUser?.id ?? null,
+          email,
+          formName: 'document_request',
+          entityId: created.id,
+          metadata: {
+            tableName: 'document_requests',
+            documentType,
+            hasAccount: Boolean(sessionUser?.id),
+          },
+        },
+        request,
+        client
+      );
+
+      return created;
+    });
 
     return NextResponse.json({
       ok: true,

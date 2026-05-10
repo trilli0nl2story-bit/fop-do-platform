@@ -1,12 +1,16 @@
 ﻿import { NextResponse } from 'next/server';
 import { getCurrentUser } from '@/src/server/auth';
-import { query } from '@/src/server/db';
+import { withTransaction } from '@/src/server/db';
 import {
   consumeRequestRateLimit,
   rateLimitResponse,
   requireTrustedOrigin,
 } from '@/src/server/security';
-import { buildConsentMeta, ensureConsentColumns } from '@/src/server/publicFormConsent';
+import {
+  buildConsentMeta,
+  ensureConsentColumns,
+  recordPublicFormPersonalDataConsent,
+} from '@/src/server/publicFormConsent';
 
 export const dynamic = 'force-dynamic';
 
@@ -128,10 +132,32 @@ export async function POST(request: Request) {
     await ensureConsentColumns('author_applications');
     const consentMeta = buildConsentMeta(request);
 
-    const result = await query<{ id: string; status: string; created_at: string }>(
-      `
-        INSERT INTO author_applications (
-          user_id,
+    const row = await withTransaction(async (client) => {
+      const result = await client.query<{ id: string; status: string; created_at: string }>(
+        `
+          INSERT INTO author_applications (
+            user_id,
+            name,
+            email,
+            phone,
+            city,
+            experience,
+            position,
+            bio,
+            status,
+            employment_type,
+            document_url,
+            consent_accepted_at,
+            consent_ip,
+            consent_user_agent,
+            created_at,
+            updated_at
+          )
+          VALUES ($1, $2, $3, $4, $5, $6, $7, $8, 'pending', $9, $10, $11, $12, $13, now(), now())
+          RETURNING id, status, created_at
+        `,
+        [
+          sessionUser?.id ?? null,
           name,
           email,
           phone,
@@ -139,37 +165,38 @@ export async function POST(request: Request) {
           experience,
           position,
           bio,
-          status,
-          employment_type,
-          document_url,
-          consent_accepted_at,
-          consent_ip,
-          consent_user_agent,
-          created_at,
-          updated_at
-        )
-        VALUES ($1, $2, $3, $4, $5, $6, $7, $8, 'pending', $9, $10, $11, $12, $13, now(), now())
-        RETURNING id, status, created_at
-      `,
-      [
-        sessionUser?.id ?? null,
-        name,
-        email,
-        phone,
-        city,
-        experience,
-        position,
-        bio,
-        employmentType,
-        sampleUrl || null,
-        consentMeta.acceptedAt,
-        consentMeta.ip,
-        consentMeta.userAgent,
-      ]
-    );
+          employmentType,
+          sampleUrl || null,
+          consentMeta.acceptedAt,
+          consentMeta.ip,
+          consentMeta.userAgent,
+        ]
+      );
 
-    const row = result.rows[0];
-    if (!row) throw new Error('author_application_not_created');
+      const created = result.rows[0];
+      if (!created) throw new Error('author_application_not_created');
+
+      await recordPublicFormPersonalDataConsent(
+        {
+          userId: sessionUser?.id ?? null,
+          email,
+          phone,
+          formName: 'author_application',
+          entityId: created.id,
+          metadata: {
+            tableName: 'author_applications',
+            employmentType,
+            hasPhone: Boolean(phone),
+            hasSampleUrl: Boolean(sampleUrl),
+            hasAccount: Boolean(sessionUser?.id),
+          },
+        },
+        request,
+        client
+      );
+
+      return created;
+    });
 
     return NextResponse.json({
       ok: true,

@@ -1,4 +1,6 @@
 import { query } from './db';
+import { ensureConsentsTable, recordConsent } from './consents';
+import type { PoolClient } from 'pg';
 
 export interface ConsentMeta {
   acceptedAt: string;
@@ -52,4 +54,37 @@ export async function ensureConsentColumns(tableName: string): Promise<void> {
 
   consentReady.set(tableName, task);
   await task;
+}
+
+export async function recordPublicFormPersonalDataConsent(
+  params: {
+    userId?: string | null;
+    email?: string | null;
+    phone?: string | null;
+    formName: string;
+    entityId: string;
+    metadata?: Record<string, unknown>;
+  },
+  request: Request,
+  client?: PoolClient
+): Promise<void> {
+  await ensureConsentsTable();
+  await recordConsent(
+    {
+      userId: params.userId ?? null,
+      email: params.email ?? null,
+      phone: params.phone ?? null,
+      formName: params.formName,
+      consentType: 'personal_data',
+      documentSlug: 'personal-data-consent',
+      metadata: {
+        formVersion: 'public-form-2026-05',
+        entityId: params.entityId,
+        linkedDocumentSlugs: ['privacy-policy'],
+        ...(params.metadata ?? {}),
+      },
+    },
+    request,
+    client
+  );
 }

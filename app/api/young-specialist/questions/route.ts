@@ -1,13 +1,17 @@
 ﻿import { randomInt } from 'node:crypto';
 import { NextResponse } from 'next/server';
 import { getCurrentUser } from '@/src/server/auth';
-import { query } from '@/src/server/db';
+import { query, withTransaction } from '@/src/server/db';
 import {
   consumeRequestRateLimit,
   rateLimitResponse,
   requireTrustedOrigin,
 } from '@/src/server/security';
-import { buildConsentMeta, ensureConsentColumns } from '@/src/server/publicFormConsent';
+import {
+  buildConsentMeta,
+  ensureConsentColumns,
+  recordPublicFormPersonalDataConsent,
+} from '@/src/server/publicFormConsent';
 
 export const dynamic = 'force-dynamic';
 
@@ -191,56 +195,78 @@ export async function POST(request: Request) {
     const ticketId = await createUniqueTicketId();
     const consentMeta = buildConsentMeta(request);
 
-    const result = await query<{ id: string; ticket_id: string; status: string; created_at: string }>(
-      `
-        INSERT INTO young_specialist_questions (
-          user_id,
-          ticket_id,
+    const row = await withTransaction(async (client) => {
+      const result = await client.query<{ id: string; ticket_id: string; status: string; created_at: string }>(
+        `
+          INSERT INTO young_specialist_questions (
+            user_id,
+            ticket_id,
+            name,
+            age,
+            city,
+            email,
+            position,
+            group_age,
+            program,
+            topic,
+            question,
+            vk_link,
+            telegram_link,
+            consent_accepted_at,
+            consent_ip,
+            consent_user_agent,
+            status,
+            created_at,
+            updated_at
+          )
+          VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, 'new', now(), now())
+          RETURNING id, ticket_id, status, created_at
+        `,
+        [
+          sessionUser?.id ?? null,
+          ticketId,
           name,
           age,
           city,
           email,
           position,
-          group_age,
+          groupAge,
           program,
           topic,
           question,
-          vk_link,
-          telegram_link,
-          consent_accepted_at,
-          consent_ip,
-          consent_user_agent,
-          status,
-          created_at,
-          updated_at
-        )
-        VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, 'new', now(), now())
-        RETURNING id, ticket_id, status, created_at
-      `,
-      [
-        sessionUser?.id ?? null,
-        ticketId,
-        name,
-        age,
-        city,
-        email,
-        position,
-        groupAge,
-        program,
-        topic,
-        question,
-        vkLink || null,
-        telegramLink || null,
-        consentMeta.acceptedAt,
-        consentMeta.ip,
-        consentMeta.userAgent,
-      ]
-    );
+          vkLink || null,
+          telegramLink || null,
+          consentMeta.acceptedAt,
+          consentMeta.ip,
+          consentMeta.userAgent,
+        ]
+      );
 
-    const row = result.rows[0];
-    if (!row) {
-      throw new Error('question_not_created');
-    }
+      const created = result.rows[0];
+      if (!created) {
+        throw new Error('question_not_created');
+      }
+
+      await recordPublicFormPersonalDataConsent(
+        {
+          userId: sessionUser?.id ?? null,
+          email,
+          formName: 'young_specialist_question',
+          entityId: created.id,
+          metadata: {
+            tableName: 'young_specialist_questions',
+            ticketId: created.ticket_id,
+            hasVkLink: Boolean(vkLink),
+            hasTelegramLink: Boolean(telegramLink),
+            hasAccount: Boolean(sessionUser?.id),
+          },
+        },
+        request,
+        client
+      );
+
+      return created;
+    });
 
     return NextResponse.json({
       ok: true,
