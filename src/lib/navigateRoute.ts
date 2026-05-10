@@ -6,8 +6,10 @@ export function resolveRoute(page: string): string {
   if (page === 'login') return '/vhod';
   if (page === 'register') return '/registratsiya';
   if (page === 'forgot-password') return '/vosstanovlenie-parolya';
+  if (page === 'library') return '/materialy';
+  if (page === 'answer-base') return '/molodoy-specialist';
   if (page === 'dashboard') return '/kabinet';
-  if (page === 'profile') return '/kabinet';
+  if (page === 'profile') return '/kabinet?section=profile';
   if (page === 'cart') return '/korzina';
   if (page === 'subscription') return '/podpiska';
   if (page === 'assistant') return '/pomoshchnik';

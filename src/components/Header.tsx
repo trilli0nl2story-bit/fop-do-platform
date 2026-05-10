@@ -100,7 +100,7 @@ export function Header({ currentPage, onNavigate, isAuthenticated }: HeaderProps
                   </button>
                 )}
                 <button
-                  onClick={() => onNavigate('materials-hub')}
+                  onClick={() => onNavigate('my-documents')}
                   className="flex items-center gap-1.5 px-3 py-1.5 text-sm font-medium text-blue-600 hover:text-blue-700 hover:bg-blue-50 rounded-lg transition-colors"
                 >
                   <User className="w-4 h-4" />

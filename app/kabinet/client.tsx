@@ -3,7 +3,7 @@
 import { useState, useEffect } from 'react';
 import { useRouter, useSearchParams } from 'next/navigation';
 import Link from 'next/link';
-import { LogOut, BookOpen, Star, FileText, ShoppingBag, User, MapPin, Briefcase, Building, Download, Loader2, CheckCircle2, Share2, Bot } from 'lucide-react';
+import { LogOut, BookOpen, Star, FileText, ShoppingBag, User, MapPin, Briefcase, Building, Download, Loader2, CheckCircle2, Share2, Bot, Package, HelpCircle, ChevronRight } from 'lucide-react';
 import { useAuthSession } from '../../src/hooks/useAuthSession';
 
 interface AccountSummary {
@@ -465,6 +465,7 @@ export function KabinetClient() {
   const orders = summary?.orders;
   const referral = summary?.referral;
   const ai = summary?.ai;
+  const isProfileSection = searchParams.get('section') === 'profile';
 
   // Authenticated
   return (
@@ -472,7 +473,7 @@ export function KabinetClient() {
       {/* Header bar */}
       <div className="bg-white border-b border-gray-100 shadow-sm">
         <div className="max-w-4xl mx-auto px-4 sm:px-6 h-14 flex items-center justify-between">
-          <Link href="/" className="flex items-center gap-2">
+          <Link href="/kabinet" className="flex items-center gap-2">
             <div className="w-7 h-7 bg-blue-500 rounded-md flex items-center justify-center text-white font-bold text-sm">
               М
             </div>
@@ -537,6 +538,129 @@ export function KabinetClient() {
             {verifyError && (
               <p className="mt-3 text-sm text-red-600">{verifyError}</p>
             )}
+          </div>
+        )}
+
+        {!isProfileSection && (
+          <section className="space-y-5">
+            <div>
+              <h1 className="text-2xl sm:text-3xl font-bold text-gray-900">
+                Методический кабинет
+              </h1>
+              <p className="mt-2 text-sm text-gray-600">
+                Главная кабинета: быстрый вход в материалы, помощника и ваши документы.
+              </p>
+            </div>
+
+            <div className="grid gap-3 sm:grid-cols-3">
+              <Link
+                href="/materialy/besplatno"
+                className="group relative overflow-hidden rounded-2xl border border-gray-200 bg-white p-5 shadow-sm transition-colors hover:border-green-200"
+              >
+                <div className="absolute inset-y-0 left-0 w-1 bg-green-500" />
+                <div className="mb-4 flex h-11 w-11 items-center justify-center rounded-xl bg-green-50 text-green-600 transition-transform group-hover:scale-105">
+                  <BookOpen className="h-5 w-5" />
+                </div>
+                <p className="text-lg font-bold text-gray-900">Бесплатно</p>
+                <p className="mt-1 text-sm text-gray-600">Материалы, доступные после быстрой регистрации.</p>
+                <p className="mt-3 inline-flex items-center gap-1 text-sm font-semibold text-green-700">
+                  Открыть <ChevronRight className="h-4 w-4" />
+                </p>
+              </Link>
+
+              <Link
+                href="/materialy/podpiska"
+                className="group relative overflow-hidden rounded-2xl border border-gray-200 bg-white p-5 shadow-sm transition-colors hover:border-amber-200"
+              >
+                <div className="absolute inset-y-0 left-0 w-1 bg-amber-500" />
+                <div className="mb-4 flex h-11 w-11 items-center justify-center rounded-xl bg-amber-50 text-amber-600 transition-transform group-hover:scale-105">
+                  <Star className="h-5 w-5" />
+                </div>
+                <p className="text-lg font-bold text-gray-900">По подписке</p>
+                <p className="mt-1 text-sm text-gray-600">Библиотека и AI-помощник при активной подписке.</p>
+                <p className="mt-3 inline-flex items-center gap-1 text-sm font-semibold text-amber-700">
+                  Смотреть <ChevronRight className="h-4 w-4" />
+                </p>
+              </Link>
+
+              <Link
+                href="/materialy/magazin"
+                className="group relative overflow-hidden rounded-2xl border border-gray-200 bg-white p-5 shadow-sm transition-colors hover:border-blue-200"
+              >
+                <div className="absolute inset-y-0 left-0 w-1 bg-blue-500" />
+                <div className="mb-4 flex h-11 w-11 items-center justify-center rounded-xl bg-blue-50 text-blue-600 transition-transform group-hover:scale-105">
+                  <ShoppingBag className="h-5 w-5" />
+                </div>
+                <p className="text-lg font-bold text-gray-900">Магазин</p>
+                <p className="mt-1 text-sm text-gray-600">Документы, которые можно купить отдельно.</p>
+                <p className="mt-3 inline-flex items-center gap-1 text-sm font-semibold text-blue-700">
+                  К покупкам <ChevronRight className="h-4 w-4" />
+                </p>
+              </Link>
+            </div>
+
+            <div className="grid gap-3 sm:grid-cols-2">
+              <Link
+                href="/moi-dokumenty"
+                className="flex items-start gap-3 rounded-2xl border border-gray-200 bg-white p-5 shadow-sm transition-colors hover:border-blue-200"
+              >
+                <div className="flex h-10 w-10 flex-shrink-0 items-center justify-center rounded-xl bg-blue-50 text-blue-600">
+                  <FileText className="h-5 w-5" />
+                </div>
+                <div className="min-w-0">
+                  <p className="font-semibold text-gray-900">Мои материалы</p>
+                  <p className="mt-1 text-sm text-gray-600">Купленные и доступные по подписке документы.</p>
+                </div>
+              </Link>
+
+              <Link
+                href="/pomoshchnik"
+                className="flex items-start gap-3 rounded-2xl border border-gray-200 bg-white p-5 shadow-sm transition-colors hover:border-emerald-200"
+              >
+                <div className="flex h-10 w-10 flex-shrink-0 items-center justify-center rounded-xl bg-emerald-50 text-emerald-600">
+                  <Bot className="h-5 w-5" />
+                </div>
+                <div className="min-w-0">
+                  <p className="font-semibold text-gray-900">Помощник</p>
+                  <p className="mt-1 text-sm text-gray-600">AI-запросы, идеи занятий и быстрые ответы.</p>
+                </div>
+              </Link>
+
+              <Link
+                href="/zakazat-dokument"
+                className="flex items-start gap-3 rounded-2xl border border-gray-200 bg-white p-5 shadow-sm transition-colors hover:border-teal-200"
+              >
+                <div className="flex h-10 w-10 flex-shrink-0 items-center justify-center rounded-xl bg-teal-50 text-teal-600">
+                  <Package className="h-5 w-5" />
+                </div>
+                <div className="min-w-0">
+                  <p className="font-semibold text-gray-900">Заказать документ</p>
+                  <p className="mt-1 text-sm text-gray-600">Заявки на материалы, которых пока нет в каталоге.</p>
+                </div>
+              </Link>
+
+              <Link
+                href="/molodoy-specialist"
+                className="flex items-start gap-3 rounded-2xl border border-gray-200 bg-white p-5 shadow-sm transition-colors hover:border-sky-200"
+              >
+                <div className="flex h-10 w-10 flex-shrink-0 items-center justify-center rounded-xl bg-sky-50 text-sky-600">
+                  <HelpCircle className="h-5 w-5" />
+                </div>
+                <div className="min-w-0">
+                  <p className="font-semibold text-gray-900">Молодой специалист</p>
+                  <p className="mt-1 text-sm text-gray-600">Вопросы эксперту и база коротких ответов.</p>
+                </div>
+              </Link>
+            </div>
+          </section>
+        )}
+
+        {isProfileSection && (
+          <div>
+            <h1 className="text-2xl sm:text-3xl font-bold text-gray-900">Профиль</h1>
+            <p className="mt-2 text-sm text-gray-600">
+              Данные аккаунта, подтверждение почты и управление сессиями.
+            </p>
           </div>
         )}
 
