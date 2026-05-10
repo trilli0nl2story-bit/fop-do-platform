@@ -70,6 +70,14 @@ export interface SubscriptionCheckoutResult {
   planId: SubscriptionPlanDefinition['id'];
 }
 
+type BeforeSubscriptionPaymentReadyParams = {
+  orderId: string;
+  paymentId: string;
+  totalRubles: number;
+  planId: SubscriptionPlanDefinition['id'];
+  months: number;
+};
+
 export type EffectiveSubscriptionStatus = 'active' | 'cancelled' | 'expired' | 'paused';
 
 export interface AdminSubscriptionUpdateResult {
@@ -289,6 +297,7 @@ export async function createSubscriptionCheckout(params: {
   userId: string;
   planId: string;
   requestOrigin: string;
+  beforePaymentReady: (payment: BeforeSubscriptionPaymentReadyParams) => Promise<void>;
 }): Promise<SubscriptionCheckoutResult> {
   if (!isProdamusConfigured()) {
     throw new SubscriptionCheckoutError(
@@ -324,6 +333,14 @@ export async function createSubscriptionCheckout(params: {
 
     const created = await createSubscriptionRows(client, params.userId, plan);
     return { ...created, reused: null };
+  });
+
+  await params.beforePaymentReady({
+    orderId: order.id,
+    paymentId: payment.id,
+    totalRubles,
+    planId: plan.id,
+    months: plan.months,
   });
 
   let paymentUrl = reused?.paymentUrl ?? null;

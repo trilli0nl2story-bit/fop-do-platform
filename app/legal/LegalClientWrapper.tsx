@@ -12,6 +12,7 @@ import { Terms } from '../../src/views/legal/Terms';
 import { Consent } from '../../src/views/legal/Consent';
 import { Refund } from '../../src/views/legal/Refund';
 import { Authors } from '../../src/views/legal/Authors';
+import { SubscriptionTerms } from '../../src/views/legal/SubscriptionTerms';
 
 const VIEWS: Record<string, React.ComponentType<{ onNavigate: (p: string) => void }>> = {
   oferta: Offer,
@@ -20,6 +21,7 @@ const VIEWS: Record<string, React.ComponentType<{ onNavigate: (p: string) => voi
   soglasie: Consent,
   vozvrat: Refund,
   avtory: Authors,
+  subscription: SubscriptionTerms,
 };
 
 interface LegalClientWrapperProps {

@@ -7,6 +7,7 @@ const documents = [
   { title: 'Пользовательское соглашение', href: '/legal/usloviya' },
   { title: 'Согласие на обработку персональных данных', href: '/legal/soglasie' },
   { title: 'Согласие на рассылку', href: '/legal/marketing-consent' },
+  { title: 'Условия подписки', href: '/legal/subscription' },
   { title: 'Оплата и возврат', href: '/legal/vozvrat' },
   { title: 'Для авторов', href: '/legal/avtory' },
 ];

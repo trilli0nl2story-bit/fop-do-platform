@@ -38,6 +38,18 @@ interface StoreCheckoutConsentParams {
   };
 }
 
+interface SubscriptionCheckoutConsentParams {
+  userId: string;
+  email?: string | null;
+  sourceUrl?: string | null;
+  metadata: Record<string, unknown> & {
+    orderId: string;
+    paymentId: string;
+    totalRubles: number;
+    planId: string;
+  };
+}
+
 let consentsTableReady: Promise<void> | null = null;
 
 export async function ensureConsentsTable(): Promise<void> {
@@ -198,4 +210,61 @@ export async function hasStoreCheckoutConsents(params: {
   const types = new Set(result.rows.map((row) => row.consent_type));
 
   return types.has('offer') && types.has('refund');
+}
+
+export async function recordSubscriptionCheckoutConsents(
+  params: SubscriptionCheckoutConsentParams,
+  request: Request
+): Promise<void> {
+  await ensureConsentsTable();
+
+  await withTransaction(async (client) => {
+    for (const consent of [
+      { consentType: 'offer' as const, documentSlug: 'offer' as const },
+      { consentType: 'subscription' as const, documentSlug: 'subscription' as const },
+      { consentType: 'refund' as const, documentSlug: 'refund' as const },
+    ]) {
+      await recordConsent(
+        {
+          userId: params.userId,
+          email: params.email,
+          formName: 'subscription_checkout',
+          consentType: consent.consentType,
+          documentSlug: consent.documentSlug,
+          sourceUrl: params.sourceUrl,
+          metadata: params.metadata,
+        },
+        request,
+        client
+      );
+    }
+  });
+}
+
+export async function hasSubscriptionCheckoutConsents(params: {
+  userId: string;
+  orderId: string;
+  client?: PoolClient;
+}): Promise<boolean> {
+  await ensureConsentsTable();
+
+  const sql = `
+    SELECT DISTINCT consent_type
+    FROM consents
+    WHERE user_id = $1
+      AND form_name = 'subscription_checkout'
+      AND metadata->>'orderId' = $2
+      AND (
+        (consent_type = 'offer' AND document_slug = 'offer')
+        OR (consent_type = 'subscription' AND document_slug = 'subscription')
+        OR (consent_type = 'refund' AND document_slug = 'refund')
+      )
+  `;
+  const values = [params.userId, params.orderId];
+  const result = params.client
+    ? await params.client.query<ConsentTypeRow>(sql, values)
+    : await query<ConsentTypeRow>(sql, values);
+  const types = new Set(result.rows.map((row) => row.consent_type));
+
+  return types.has('offer') && types.has('subscription') && types.has('refund');
 }

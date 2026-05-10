@@ -5,6 +5,7 @@ import Link from 'next/link';
 import { useRouter, useSearchParams } from 'next/navigation';
 import { CheckCircle2, Crown, Loader2, ShieldCheck, Sparkles } from 'lucide-react';
 import { useAuthSession } from '../../src/hooks/useAuthSession';
+import { SubscriptionConsentCheckbox } from '../../src/components/SubscriptionConsentCheckbox';
 import {
   getSubscriptionPlanMonthlyRubles,
   getSubscriptionPlanTotalRubles,
@@ -61,6 +62,7 @@ export function PodpiskaCheckoutClient() {
   const [summary, setSummary] = useState<AccountSubscriptionSummary | null>(null);
   const [summaryLoading, setSummaryLoading] = useState(false);
   const [resumePaymentUrl, setResumePaymentUrl] = useState('');
+  const [subscriptionConsent, setSubscriptionConsent] = useState(false);
 
   useEffect(() => {
     if (!isAuthenticated) return;
@@ -165,6 +167,11 @@ export function PodpiskaCheckoutClient() {
       return;
     }
 
+    if (!subscriptionConsent) {
+      setCheckoutError('Подтвердите условия оферты, подписки и возврата перед оплатой.');
+      return;
+    }
+
     setCheckoutLoading(true);
     setCheckoutError('');
     setCheckoutNotice('');
@@ -177,7 +184,14 @@ export function PodpiskaCheckoutClient() {
         headers: {
           'Content-Type': 'application/json',
         },
-        body: JSON.stringify({ planId: selectedPlanData.id }),
+        body: JSON.stringify({
+          planId: selectedPlanData.id,
+          consents: {
+            offer: subscriptionConsent,
+            subscription: subscriptionConsent,
+            refund: subscriptionConsent,
+          },
+        }),
       });
 
       const data = await response.json().catch(() => ({}));
@@ -345,10 +359,24 @@ export function PodpiskaCheckoutClient() {
                 </div>
               </div>
 
+              <div className="mt-4 rounded-lg border border-amber-200 bg-amber-50 px-3 py-2 text-xs leading-relaxed text-amber-900">
+                Сейчас это разовая оплата доступа на выбранный срок. Автоматические списания карты не подключены.
+              </div>
+
+              <SubscriptionConsentCheckbox
+                checked={subscriptionConsent}
+                onChange={(checked) => {
+                  setSubscriptionConsent(checked);
+                  if (checked && checkoutError === 'Подтвердите условия оферты, подписки и возврата перед оплатой.') {
+                    setCheckoutError('');
+                  }
+                }}
+              />
+
               <button
                 type="button"
                 onClick={handleCheckout}
-                disabled={checkoutLoading || summaryLoading}
+                disabled={checkoutLoading || summaryLoading || (isAuthenticated && !subscriptionConsent)}
                 className="mt-5 inline-flex w-full items-center justify-center rounded-xl bg-amber-500 px-4 py-3 font-semibold text-white transition-colors hover:bg-amber-600 disabled:opacity-50"
               >
                 {checkoutLoading

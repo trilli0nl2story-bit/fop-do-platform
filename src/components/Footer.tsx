@@ -9,6 +9,7 @@ const legalLinks = [
   { label: 'Политика обработки персональных данных', href: '/legal/konfidentsialnost' },
   { label: 'Пользовательское соглашение', href: '/legal/usloviya' },
   { label: 'Согласие на обработку персональных данных', href: '/legal/soglasie' },
+  { label: 'Условия подписки', href: '/legal/subscription' },
   { label: 'Оплата и возврат', href: '/legal/vozvrat' },
   { label: 'Для авторов', href: '/legal/avtory' },
 ];

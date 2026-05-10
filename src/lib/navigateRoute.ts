@@ -25,6 +25,7 @@ export function resolveRoute(page: string): string {
   if (page === 'consent') return '/legal/soglasie';
   if (page === 'refund') return '/legal/vozvrat';
   if (page === 'authors') return '/legal/avtory';
+  if (page === 'subscription-terms') return '/legal/subscription';
   if (page === 'privacy-policy') return '/legal/privacy-policy';
   if (page === 'personal-data-consent') return '/legal/personal-data-consent';
   if (page === 'marketing-consent') return '/legal/marketing-consent';

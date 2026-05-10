@@ -9,7 +9,7 @@ import {
 import { getAppOrigin } from './appOrigin';
 import { claimReferralForOrder } from './referrals';
 import { buildProdamusPayformUrl, isProdamusConfigured } from './prodamus';
-import { hasStoreCheckoutConsents } from './consents';
+import { hasStoreCheckoutConsents, hasSubscriptionCheckoutConsents } from './consents';
 
 export class CheckoutError extends Error {
   status: number;
@@ -395,7 +395,7 @@ export async function createStoreOrderCheckout(params: {
   items: CartQuoteInputItem[];
   referralCode?: string | null;
   requestOrigin: string;
-  beforePaymentReady?: (payment: BeforePaymentReadyParams) => Promise<void>;
+  beforePaymentReady: (payment: BeforePaymentReadyParams) => Promise<void>;
 }): Promise<CreateOrderResult> {
   if (!isProdamusConfigured()) {
     throw new CheckoutError(
@@ -466,7 +466,7 @@ export async function createStoreOrderCheckout(params: {
 
   const totalRubles = kopecksToRubles(Number(order.total_amount ?? 0));
 
-  await params.beforePaymentReady?.({
+  await params.beforePaymentReady({
     orderId: order.id,
     paymentId: payment.id,
     totalRubles,
@@ -556,10 +556,11 @@ export async function getUserOrderStatus(
     typeof payment?.raw_payload?.kind === 'string'
       ? payment.raw_payload.kind
       : 'store_order';
-  const requiresCheckoutConsents = paymentKind !== 'subscription';
   const hasCheckoutConsents =
-    payment?.status === 'pending' && order.status === 'pending' && requiresCheckoutConsents
+    payment?.status === 'pending' && order.status === 'pending' && paymentKind === 'store_order'
       ? await hasStoreCheckoutConsents({ userId, orderId })
+      : payment?.status === 'pending' && order.status === 'pending' && paymentKind === 'subscription'
+        ? await hasSubscriptionCheckoutConsents({ userId, orderId })
       : true;
 
   const resumePaymentUrl =

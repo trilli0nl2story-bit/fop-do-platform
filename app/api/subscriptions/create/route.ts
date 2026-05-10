@@ -1,5 +1,6 @@
 import { NextResponse } from 'next/server';
 import { getCurrentUser } from '@/src/server/auth';
+import { recordSubscriptionCheckoutConsents } from '@/src/server/consents';
 import { createSubscriptionCheckout, SubscriptionCheckoutError } from '@/src/server/subscriptions';
 import {
   consumeRequestRateLimit,
@@ -11,7 +12,22 @@ export const dynamic = 'force-dynamic';
 
 type CreateSubscriptionBody = {
   planId?: string;
+  consents?: {
+    offer?: boolean;
+    subscription?: boolean;
+    refund?: boolean;
+  };
+  offerConsent?: boolean;
+  subscriptionConsent?: boolean;
+  refundConsent?: boolean;
 };
+
+function hasSubscriptionConsent(body: CreateSubscriptionBody): boolean {
+  const offer = body.consents?.offer === true || body.offerConsent === true;
+  const subscription = body.consents?.subscription === true || body.subscriptionConsent === true;
+  const refund = body.consents?.refund === true || body.refundConsent === true;
+  return offer && subscription && refund;
+}
 
 export async function POST(request: Request) {
   const originError = requireTrustedOrigin(request);
@@ -37,10 +53,37 @@ export async function POST(request: Request) {
 
   try {
     const body = await request.json() as CreateSubscriptionBody;
+    if (!hasSubscriptionConsent(body)) {
+      return NextResponse.json(
+        {
+          error: 'missing_consent',
+          message: 'Подтвердите условия оферты, подписки и возврата перед оплатой.',
+        },
+        { status: 400 }
+      );
+    }
+
     const checkout = await createSubscriptionCheckout({
       userId: sessionUser.id,
       planId: typeof body.planId === 'string' ? body.planId : '',
       requestOrigin: new URL(request.url).origin,
+      beforePaymentReady: async (payment) => {
+        await recordSubscriptionCheckoutConsents(
+          {
+            userId: sessionUser.id,
+            email: sessionUser.email,
+            sourceUrl: request.headers.get('referer') ?? '/podpiska',
+            metadata: {
+              orderId: payment.orderId,
+              paymentId: payment.paymentId,
+              totalRubles: payment.totalRubles,
+              planId: payment.planId,
+              months: payment.months,
+            },
+          },
+          request
+        );
+      },
     });
 
     return NextResponse.json({
