@@ -14,9 +14,11 @@ import {
   HelpCircle,
   LayoutDashboard,
   Loader2,
+  Mail,
   Menu,
   Package,
   RotateCcw,
+  Send,
   Share2,
   ShieldAlert,
   ShoppingBag,
@@ -106,6 +108,20 @@ interface AdminReadiness {
     required: boolean;
     message: string;
   }>;
+}
+
+interface SmtpDiagnostics {
+  configured: boolean;
+  secure: boolean;
+  present: {
+    host: boolean;
+    port: boolean;
+    user: boolean;
+    pass: boolean;
+    from: boolean;
+  };
+  missingKeys: string[];
+  warnings: string[];
 }
 
 const navItems: Array<{
@@ -215,12 +231,173 @@ function DevelopmentNotice({ title }: { title: string }) {
   );
 }
 
+function SmtpDiagnosticsPanel({ defaultEmail }: { defaultEmail: string }) {
+  const [diagnostics, setDiagnostics] = useState<SmtpDiagnostics | null>(null);
+  const [testEmail, setTestEmail] = useState(defaultEmail);
+  const [loading, setLoading] = useState(false);
+  const [sending, setSending] = useState(false);
+  const [message, setMessage] = useState('');
+  const [error, setError] = useState('');
+
+  useEffect(() => {
+    if (!testEmail && defaultEmail) setTestEmail(defaultEmail);
+  }, [defaultEmail, testEmail]);
+
+  const loadDiagnostics = async () => {
+    setLoading(true);
+    setError('');
+    setMessage('');
+    try {
+      const response = await fetch('/api/admin/email-test', { credentials: 'include' });
+      const data = await response.json().catch(() => ({}));
+      if (!response.ok) throw new Error(data.message ?? data.error ?? 'Не удалось проверить SMTP.');
+      setDiagnostics(data.diagnostics ?? null);
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Не удалось проверить SMTP.');
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const sendTestEmail = async () => {
+    setSending(true);
+    setError('');
+    setMessage('');
+    try {
+      const response = await fetch('/api/admin/email-test', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        credentials: 'include',
+        body: JSON.stringify({ to: testEmail.trim() || defaultEmail }),
+      });
+      const data = await response.json().catch(() => ({}));
+      if (!response.ok) {
+        if (data.diagnostics) setDiagnostics(data.diagnostics);
+        throw new Error(data.message ?? data.error ?? 'Тестовое письмо не отправилось.');
+      }
+      setMessage(`Тестовое письмо отправлено на ${data.to}. Проверьте входящие и спам.`);
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Тестовое письмо не отправилось.');
+    } finally {
+      setSending(false);
+    }
+  };
+
+  const presentRows = diagnostics
+    ? [
+        ['SMTP_HOST', diagnostics.present.host],
+        ['SMTP_PORT', diagnostics.present.port],
+        ['SMTP_USER', diagnostics.present.user],
+        ['SMTP_PASS', diagnostics.present.pass],
+        ['SMTP_FROM', diagnostics.present.from],
+      ] as const
+    : [];
+
+  return (
+    <section className="bg-white rounded-2xl border border-gray-200 shadow-sm p-5">
+      <div className="flex flex-col lg:flex-row lg:items-start lg:justify-between gap-4">
+        <div>
+          <div className="flex items-center gap-2">
+            <Mail className="w-5 h-5 text-blue-500" />
+            <h2 className="font-semibold text-gray-900">SMTP-диагностика</h2>
+          </div>
+          <p className="text-sm text-gray-500 mt-1 max-w-2xl">
+            Проверяет, видит ли опубликованный сервер настройки почты. Секреты и значения не показываются.
+          </p>
+        </div>
+        <button
+          type="button"
+          onClick={loadDiagnostics}
+          disabled={loading}
+          className="inline-flex items-center justify-center gap-2 px-4 py-2 rounded-xl bg-blue-600 hover:bg-blue-700 text-white text-sm font-semibold disabled:opacity-50"
+        >
+          {loading && <Loader2 className="w-4 h-4 animate-spin" />}
+          Проверить настройки
+        </button>
+      </div>
+
+      {diagnostics && (
+        <div className="mt-5 grid grid-cols-1 lg:grid-cols-2 gap-4">
+          <div className={`rounded-xl border p-4 ${diagnostics.configured ? 'border-green-100 bg-green-50' : 'border-amber-100 bg-amber-50'}`}>
+            <div className="flex items-center justify-between gap-3">
+              <p className="text-sm font-semibold text-gray-900">Статус SMTP</p>
+              <span className={`px-2 py-0.5 rounded-full text-[11px] font-semibold ${diagnostics.configured ? 'bg-green-100 text-green-700' : 'bg-amber-100 text-amber-700'}`}>
+                {diagnostics.configured ? 'готово' : 'нужно настроить'}
+              </span>
+            </div>
+            <div className="mt-3 grid grid-cols-1 sm:grid-cols-2 gap-2">
+              {presentRows.map(([key, present]) => (
+                <div key={key} className="flex items-center justify-between rounded-lg bg-white/70 px-3 py-2 text-sm">
+                  <span className="font-medium text-gray-700">{key}</span>
+                  <span className={present ? 'text-green-700' : 'text-amber-700'}>
+                    {present ? 'есть' : 'нет'}
+                  </span>
+                </div>
+              ))}
+            </div>
+            {diagnostics.missingKeys.length > 0 && (
+              <p className="mt-3 text-sm text-amber-800">
+                Не хватает: {diagnostics.missingKeys.join(', ')}
+              </p>
+            )}
+            {diagnostics.warnings.length > 0 && (
+              <div className="mt-3 space-y-1">
+                {diagnostics.warnings.map((warning) => (
+                  <p key={warning} className="text-sm text-amber-800">{warning}</p>
+                ))}
+              </div>
+            )}
+          </div>
+
+          <div className="rounded-xl border border-gray-100 bg-gray-50 p-4">
+            <p className="text-sm font-semibold text-gray-900">Тестовое письмо</p>
+            <p className="mt-1 text-sm text-gray-500">
+              Отправляет фиксированное письмо для проверки доставки. Используйте свой email.
+            </p>
+            <div className="mt-3 flex flex-col sm:flex-row gap-2">
+              <input
+                type="email"
+                value={testEmail}
+                onChange={(event) => setTestEmail(event.target.value)}
+                placeholder="email для проверки"
+                className="flex-1 px-3 py-2 rounded-xl border border-gray-200 bg-white text-sm outline-none focus:ring-2 focus:ring-blue-100 focus:border-blue-400"
+              />
+              <button
+                type="button"
+                onClick={sendTestEmail}
+                disabled={sending}
+                className="inline-flex items-center justify-center gap-2 px-4 py-2 rounded-xl bg-gray-900 hover:bg-gray-800 text-white text-sm font-semibold disabled:opacity-50"
+              >
+                {sending ? <Loader2 className="w-4 h-4 animate-spin" /> : <Send className="w-4 h-4" />}
+                Отправить
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {message && (
+        <p className="mt-4 text-sm text-green-700 bg-green-50 border border-green-100 rounded-xl px-4 py-3">
+          {message}
+        </p>
+      )}
+      {error && (
+        <p className="mt-4 text-sm text-red-600 bg-red-50 border border-red-100 rounded-xl px-4 py-3">
+          {error}
+        </p>
+      )}
+    </section>
+  );
+}
+
 function DashboardSection({
   summary,
   readiness,
+  adminEmail,
 }: {
   summary: AdminSummary | null;
   readiness: AdminReadiness | null;
+  adminEmail: string;
 }) {
   const stats = summary?.stats;
 
@@ -391,6 +568,8 @@ function DashboardSection({
           </div>
         )}
       </section>
+
+      <SmtpDiagnosticsPanel defaultEmail={adminEmail} />
     </div>
   );
 }
@@ -486,7 +665,7 @@ export function AdminClient() {
   }
 
   function renderSection() {
-    if (activeSection === 'dashboard') return <DashboardSection summary={summary} readiness={readiness} />;
+    if (activeSection === 'dashboard') return <DashboardSection summary={summary} readiness={readiness} adminEmail={email} />;
     if (activeSection === 'revenue') return <RevenueManager />;
     if (activeSection === 'orders') return <OrdersManager />;
     if (activeSection === 'document-requests') return <DocumentRequestsManager />;
