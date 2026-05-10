@@ -1,4 +1,5 @@
 import { LegalPage } from './LegalPage';
+import { legalInfo } from '../../config/legalInfo';
 
 interface PrivacyProps {
   onNavigate: (page: string) => void;
@@ -9,16 +10,16 @@ export function Privacy({ onNavigate }: PrivacyProps) {
     <LegalPage title="Политика обработки персональных данных" onNavigate={onNavigate}>
       <h2 className="text-xl font-semibold text-gray-900 mb-3">Оператор персональных данных</h2>
       <p className="text-gray-700 mb-6">
-        ИП Васильева Наталья Александровна
+        {legalInfo.legalName}
         <br />
-        ИНН 781631928699
+        ИНН {legalInfo.inn}
         <br />
-        ОГРНИП 323784700298822
+        ОГРНИП {legalInfo.ogrnip}
         <br />
         <br />
         Email:{' '}
-        <a href="mailto:official@doshkolnoe-na-lokanichnom.ru" className="text-blue-600 hover:underline">
-          official@doshkolnoe-na-lokanichnom.ru
+        <a href={`mailto:${legalInfo.email}`} className="text-blue-600 hover:underline">
+          {legalInfo.email}
         </a>
       </p>
 

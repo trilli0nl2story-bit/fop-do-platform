@@ -3,6 +3,8 @@ import { isEmailDeliveryConfigured } from './email';
 import { isProdamusConfigured } from './prodamus';
 import { isStorageConfigured } from './storage';
 import { isAssistantConfigured } from './aiAssistant';
+import { hasCompleteLegalRequisites } from '../config/legalInfo';
+import { LEGAL_DOCUMENT_VERSION, legalDocuments, type LegalDocumentSlug } from '../config/legalDocuments';
 
 export interface ReadinessCheck {
   key: string;
@@ -48,6 +50,27 @@ function doesPublicSiteUrlMatchAppOrigin(): boolean {
   return normalizeUrl(appOrigin) === normalizeUrl(publicSiteUrl);
 }
 
+const REQUIRED_LEGAL_DOCUMENTS: LegalDocumentSlug[] = [
+  'privacy-policy',
+  'personal-data-consent',
+  'cookie-policy',
+  'terms',
+  'offer',
+  'subscription',
+  'refund',
+  'ai-rules',
+];
+
+function hasRequiredLegalDocuments(): boolean {
+  const availableSlugs = new Set(legalDocuments.map((document) => document.slug));
+  return REQUIRED_LEGAL_DOCUMENTS.every((slug) => availableSlugs.has(slug));
+}
+
+function areLegalDocumentsFinal(): boolean {
+  const explicitlyConfirmed = process.env.LEGAL_DOCUMENTS_FINAL === 'true';
+  return explicitlyConfirmed && hasRequiredLegalDocuments() && !LEGAL_DOCUMENT_VERSION.startsWith('draft-');
+}
+
 export async function getReleaseReadinessSummary(): Promise<ReadinessSummary> {
   const databaseReady = await ping();
   const appOriginConfigured = hasAppOrigin();
@@ -58,6 +81,8 @@ export async function getReleaseReadinessSummary(): Promise<ReadinessSummary> {
   const smtpConfigured = isEmailDeliveryConfigured();
   const storageConfigured = isStorageConfigured();
   const openAiConfigured = isAssistantConfigured();
+  const legalRequisitesConfigured = hasCompleteLegalRequisites();
+  const legalDocumentsFinal = areLegalDocumentsFinal();
 
   const checks: ReadinessCheck[] = [
     {
@@ -140,6 +165,24 @@ export async function getReleaseReadinessSummary(): Promise<ReadinessSummary> {
       message: openAiConfigured
         ? 'AI-помощник может отвечать пользователям.'
         : 'OPENAI_API_KEY ещё не задан.',
+    },
+    {
+      key: 'legal_requisites',
+      label: 'Юридические реквизиты',
+      configured: legalRequisitesConfigured,
+      required: true,
+      message: legalRequisitesConfigured
+        ? 'Реквизиты ИП заданы и используются в футере и юридических страницах.'
+        : 'Не хватает публичных реквизитов ИП: NEXT_PUBLIC_LEGAL_NAME, NEXT_PUBLIC_LEGAL_INN, NEXT_PUBLIC_LEGAL_OGRNIP или NEXT_PUBLIC_LEGAL_EMAIL.',
+    },
+    {
+      key: 'legal_documents_final',
+      label: 'Финальные юридические документы',
+      configured: legalDocumentsFinal,
+      required: true,
+      message: legalDocumentsFinal
+        ? 'Финальные юридические тексты подтверждены, версия документов не draft.'
+        : 'Юридические страницы есть, но тексты ещё считаются draft. Перед релизом нужно подтвердить документы, сменить LEGAL_DOCUMENT_VERSION с draft-* и поставить LEGAL_DOCUMENTS_FINAL=true.',
     },
   ];
 

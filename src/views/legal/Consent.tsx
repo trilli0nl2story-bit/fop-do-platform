@@ -1,4 +1,5 @@
 import { LegalPage } from './LegalPage';
+import { legalInfo } from '../../config/legalInfo';
 
 interface ConsentProps {
   onNavigate: (page: string) => void;
@@ -44,8 +45,8 @@ export function Consent({ onNavigate }: ConsentProps) {
       <h2 className="text-xl font-semibold text-gray-900 mb-3">Отзыв согласия</h2>
       <p className="text-gray-700">
         Пользователь может отозвать согласие, направив запрос на email:{' '}
-        <a href="mailto:official@doshkolnoe-na-lokanichnom.ru" className="text-blue-600 hover:underline">
-          official@doshkolnoe-na-lokanichnom.ru
+        <a href={`mailto:${legalInfo.email}`} className="text-blue-600 hover:underline">
+          {legalInfo.email}
         </a>
         . Отзыв согласия не влияет на законность обработки, выполненной до получения
         такого отзыва.

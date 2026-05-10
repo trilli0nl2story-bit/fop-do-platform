@@ -1,5 +1,6 @@
 import { Mail } from 'lucide-react';
 import { CookieSettingsButton } from './CookieSettingsButton';
+import { legalInfo } from '../config/legalInfo';
 
 interface FooterProps {
   onNavigate: (page: string) => void;
@@ -28,11 +29,11 @@ export function Footer({ onNavigate }: FooterProps) {
                 М
               </div>
               <span className="text-white font-semibold text-sm leading-tight">
-                Методический кабинет педагога
+                {legalInfo.platformName}
               </span>
             </div>
             <p className="text-sm text-gray-500 leading-relaxed">
-              Проект «Дошкольное на лаконичном»
+              Проект «{legalInfo.projectName}»
             </p>
           </div>
 
@@ -55,16 +56,16 @@ export function Footer({ onNavigate }: FooterProps) {
           <div>
             <h3 className="text-white font-semibold text-sm mb-4">Реквизиты</h3>
             <ul className="space-y-2 text-sm">
-              <li className="text-gray-300">ИП Васильева Наталья Александровна</li>
-              <li>ИНН: 781631928699</li>
-              <li>ОГРНИП: 323784700298822</li>
+              <li className="text-gray-300">{legalInfo.legalName}</li>
+              <li>ИНН: {legalInfo.inn}</li>
+              <li>ОГРНИП: {legalInfo.ogrnip}</li>
               <li>
                 <a
-                  href="mailto:official@doshkolnoe-na-lokanichnom.ru"
+                  href={`mailto:${legalInfo.email}`}
                   className="flex items-center gap-1.5 text-gray-400 hover:text-white transition-colors mt-1"
                 >
                   <Mail className="w-3.5 h-3.5 flex-shrink-0" />
-                  <span className="break-all">official@doshkolnoe-na-lokanichnom.ru</span>
+                  <span className="break-all">{legalInfo.email}</span>
                 </a>
               </li>
             </ul>
@@ -75,7 +76,7 @@ export function Footer({ onNavigate }: FooterProps) {
             <ul className="space-y-2 text-sm">
               <li>
                 <a
-                  href="mailto:official@doshkolnoe-na-lokanichnom.ru"
+                  href={`mailto:${legalInfo.email}`}
                   className="text-gray-400 hover:text-white transition-colors"
                 >
                   Контакты
@@ -83,7 +84,7 @@ export function Footer({ onNavigate }: FooterProps) {
               </li>
               <li>
                 <a
-                  href="mailto:official@doshkolnoe-na-lokanichnom.ru"
+                  href={`mailto:${legalInfo.email}`}
                   className="text-gray-400 hover:text-white transition-colors"
                 >
                   Поддержка
@@ -110,7 +111,7 @@ export function Footer({ onNavigate }: FooterProps) {
           </p>
           <div className="flex flex-col sm:flex-row items-center justify-between gap-3">
             <p className="text-xs text-gray-500">
-              © 2024 Методический кабинет педагога &mdash; fop-do.ru
+              © 2024 {legalInfo.platformName} &mdash; fop-do.ru
             </p>
             <p className="text-xs text-gray-600">
               Все материалы защищены авторским правом

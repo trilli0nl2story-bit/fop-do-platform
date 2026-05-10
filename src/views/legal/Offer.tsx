@@ -1,4 +1,5 @@
 import { LegalPage } from './LegalPage';
+import { legalInfo } from '../../config/legalInfo';
 
 interface OfferProps {
   onNavigate: (page: string) => void;
@@ -8,10 +9,10 @@ export function Offer({ onNavigate }: OfferProps) {
   return (
     <LegalPage title="Публичная оферта" onNavigate={onNavigate}>
       <p className="text-gray-600 mb-6">
-        Индивидуальный предприниматель Васильева Наталья Александровна<br />
-        ИНН 781631928699<br />
-        ОГРНИП 323784700298822<br /><br />
-        Email: <a href="mailto:official@doshkolnoe-na-lokanichnom.ru" className="text-blue-600 hover:underline">official@doshkolnoe-na-lokanichnom.ru</a>
+        {legalInfo.legalName}<br />
+        ИНН {legalInfo.inn}<br />
+        ОГРНИП {legalInfo.ogrnip}<br /><br />
+        Email: <a href={`mailto:${legalInfo.email}`} className="text-blue-600 hover:underline">{legalInfo.email}</a>
       </p>
 
       <p className="text-gray-700 mb-6">

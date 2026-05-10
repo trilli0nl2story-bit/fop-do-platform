@@ -1,4 +1,5 @@
 import { ArrowLeft } from 'lucide-react';
+import { legalInfo } from '../../config/legalInfo';
 
 interface LegalPageProps {
   title: string;
@@ -28,7 +29,9 @@ export function LegalPage({ title, onNavigate, children }: LegalPageProps) {
         </div>
 
         <div className="mt-8 text-center text-sm text-gray-400">
-          <p>ИП Васильева Наталья Александровна &mdash; ИНН 781631928699 &mdash; ОГРНИП 323784700298822</p>
+          <p>
+            {legalInfo.legalName} &mdash; ИНН {legalInfo.inn} &mdash; ОГРНИП {legalInfo.ogrnip}
+          </p>
         </div>
       </div>
     </div>
