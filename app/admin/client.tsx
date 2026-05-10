@@ -8,6 +8,7 @@ import {
   CheckCircle,
   Crown,
   DollarSign,
+  FileCheck2,
   FileText,
   FolderOpen,
   HelpCircle,
@@ -37,6 +38,7 @@ import { AiRequestsManager } from './ai-requests-manager';
 import { AuthorsManager } from './authors-manager';
 import { YoungSpecialistManager } from './young-specialist-manager';
 import { UsersManager } from './users-manager';
+import { ConsentsManager } from './consents-manager';
 
 type LoadState = 'loading' | 'unauth' | 'forbidden' | 'ready';
 type AdminSection =
@@ -52,6 +54,7 @@ type AdminSection =
   | 'referrals'
   | 'ai'
   | 'users'
+  | 'consents'
   | 'young-specialist';
 
 interface AdminSummary {
@@ -121,6 +124,7 @@ const navItems: Array<{
   { id: 'referrals', label: 'Рефералы', icon: <Share2 className="w-5 h-5" />, ready: true },
   { id: 'ai', label: 'AI-запросы', icon: <Bot className="w-5 h-5" />, ready: true },
   { id: 'users', label: 'Пользователи', icon: <Users className="w-5 h-5" />, ready: true },
+  { id: 'consents', label: 'Согласия', icon: <FileCheck2 className="w-5 h-5" />, ready: true },
   { id: 'young-specialist', label: 'Мол. специалист', icon: <HelpCircle className="w-5 h-5" />, ready: true },
 ];
 
@@ -137,6 +141,7 @@ const liveSections = new Set<AdminSection>([
   'referrals',
   'ai',
   'users',
+  'consents',
   'young-specialist',
 ]);
 
@@ -489,6 +494,7 @@ export function AdminClient() {
     if (activeSection === 'referrals') return <ReferralsManager />;
     if (activeSection === 'ai') return <AiRequestsManager />;
     if (activeSection === 'users') return <UsersManager />;
+    if (activeSection === 'consents') return <ConsentsManager />;
     if (activeSection === 'young-specialist') return <YoungSpecialistManager />;
     return <DevelopmentNotice title={activeLabel} />;
   }
