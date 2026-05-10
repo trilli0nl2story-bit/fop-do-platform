@@ -3,6 +3,7 @@ import { getAppOrigin } from './appOrigin';
 import { bumpUserSessionVersion, hashPassword } from './auth';
 import { query } from './db';
 import { sendEmail } from './email';
+import { buildServiceEmailHtmlFooter, buildServiceEmailTextFooter } from './emailTemplates';
 
 const TOKEN_TTL_HOURS = 2;
 
@@ -76,6 +77,8 @@ export async function issuePasswordReset(params: {
     resetUrl,
     '',
     'Если это были не вы, просто проигнорируйте письмо. Текущий пароль не изменится.',
+    '',
+    ...buildServiceEmailTextFooter(appOrigin),
   ].join('\n');
 
   const html = `
@@ -101,6 +104,7 @@ export async function issuePasswordReset(params: {
       <p style="margin:0;font-size:13px;color:#6b7280">
         Ссылка действует ${TOKEN_TTL_HOURS} часа(ов). Если запрос отправили не вы, письмо можно проигнорировать.
       </p>
+      ${buildServiceEmailHtmlFooter(appOrigin)}
     </div>
   `;
 

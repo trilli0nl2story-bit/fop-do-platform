@@ -1,6 +1,7 @@
 import { getAppOrigin } from './appOrigin';
 import { query } from './db';
 import { sendEmail } from './email';
+import { buildServiceEmailHtmlFooter, buildServiceEmailTextFooter } from './emailTemplates';
 import { getSubscriptionPlan } from './subscriptionPlans';
 
 function formatRubles(amount: number): string {
@@ -71,6 +72,8 @@ export async function sendStoreOrderPaidEmail(orderId: string): Promise<void> {
       `Мои документы: ${materialsUrl}`,
       '',
       'Спасибо, что пользуетесь платформой.',
+      '',
+      ...buildServiceEmailTextFooter(origin),
     ].join('\n'),
     html: `
       <div style="font-family:Arial,sans-serif;line-height:1.6;color:#1f2937">
@@ -96,6 +99,7 @@ export async function sendStoreOrderPaidEmail(orderId: string): Promise<void> {
         <p style="margin:0;font-size:13px;color:#6b7280">
           Если кнопка не открывается, используйте ссылку: ${cabinetUrl}
         </p>
+        ${buildServiceEmailHtmlFooter(origin)}
       </div>
     `,
   });
@@ -148,6 +152,8 @@ export async function sendSubscriptionActivatedEmail(params: {
       `Кабинет: ${cabinetUrl}`,
       '',
       'Спасибо, что пользуетесь платформой.',
+      '',
+      ...buildServiceEmailTextFooter(origin),
     ].join('\n'),
     html: `
       <div style="font-family:Arial,sans-serif;line-height:1.6;color:#1f2937">
@@ -172,6 +178,7 @@ export async function sendSubscriptionActivatedEmail(params: {
         <p style="margin:0;font-size:13px;color:#6b7280">
           Если кнопка не открывается, используйте ссылку: ${cabinetUrl}
         </p>
+        ${buildServiceEmailHtmlFooter(origin)}
       </div>
     `,
   });
