@@ -1,10 +1,12 @@
 import { useState } from 'react';
-import { FileText, Save, Download, Wand2, PenLine, RotateCcw, Sparkles, Crown, Lock, X } from 'lucide-react';
+import { AlertCircle, FileText, Save, Download, Wand2, PenLine, RotateCcw, Sparkles, Crown, Lock, X, Loader2 } from 'lucide-react';
 import { Card } from '../../components/Card';
 import { Button } from '../../components/Button';
 import { Input } from '../../components/Input';
 import { Select } from '../../components/Select';
 import { Textarea } from '../../components/Textarea';
+import { AiSafetyNotice } from '../../components/AiSafetyNotice';
+import { requestAssistantAnswer } from './requestAssistant';
 
 const AGE_OPTIONS = [
   { value: '', label: 'Выберите возраст' },
@@ -46,28 +48,69 @@ export function CreateMode({ hasSubscription, onNavigate }: CreateModeProps) {
     goal: '', tasks: '', format: '',
   });
   const [generated, setGenerated] = useState(false);
+  const [generatedText, setGeneratedText] = useState('');
   const [generating, setGenerating] = useState(false);
   const [showGate, setShowGate] = useState(false);
+  const [aiRulesAccepted, setAiRulesAccepted] = useState(false);
+  const [error, setError] = useState('');
 
   const update = (field: string) => (e: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement | HTMLSelectElement>) => {
     setForm(prev => ({ ...prev, [field]: e.target.value }));
   };
 
-  const handleGenerate = () => {
+  const buildPrompt = () => {
+    const ageLabel = AGE_OPTIONS.find((item) => item.value === form.age)?.label || form.age;
+    const programLabel = PROGRAM_OPTIONS.find((item) => item.value === form.program)?.label || 'не указана';
+    const featureLabel = DEV_OPTIONS.find((item) => item.value === form.devFeature)?.label || 'без особенностей';
+    const formatLabel = FORMAT_OPTIONS.find((item) => item.value === form.format)?.label || 'текст';
+
+    return [
+      'Подготовь черновик методического документа для педагога ДОУ.',
+      `Тема: ${form.topic.trim()}.`,
+      `Возрастная группа: ${ageLabel}.`,
+      `Программа: ${programLabel}.`,
+      `Особенности развития: ${featureLabel}.`,
+      form.goal.trim() ? `Цель: ${form.goal.trim()}.` : '',
+      form.tasks.trim() ? `Задачи: ${form.tasks.trim()}.` : '',
+      `Формат результата: ${formatLabel}.`,
+      'Пиши структурно, практично, без персональных данных детей, родителей и сотрудников.',
+    ].filter(Boolean).join('\n');
+  };
+
+  const handleGenerate = async () => {
     if (!hasSubscription) {
       setShowGate(true);
       return;
     }
+
+    if (!aiRulesAccepted) {
+      setError('Подтвердите правила безопасного использования AI-помощника перед созданием документа.');
+      return;
+    }
+
     setGenerating(true);
-    setTimeout(() => {
-      setGenerating(false);
+    setError('');
+
+    try {
+      const answer = await requestAssistantAnswer(buildPrompt());
+      setGeneratedText(answer);
       setGenerated(true);
-    }, 1200);
+    } catch (requestError) {
+      setError(
+        requestError instanceof Error
+          ? requestError.message
+          : 'Не удалось создать документ. Попробуйте ещё раз.'
+      );
+    } finally {
+      setGenerating(false);
+    }
   };
 
   const handleClear = () => {
     setForm({ topic: '', age: '', program: '', devFeature: '', goal: '', tasks: '', format: '' });
     setGenerated(false);
+    setGeneratedText('');
+    setError('');
   };
 
   const canGenerate = form.topic.trim() && form.age;
@@ -121,9 +164,26 @@ export function CreateMode({ hasSubscription, onNavigate }: CreateModeProps) {
 
             <Select label="Формат" options={FORMAT_OPTIONS} value={form.format} onChange={update('format')} />
 
+            <AiSafetyNotice
+              checked={aiRulesAccepted}
+              onChange={(checked) => {
+                setAiRulesAccepted(checked);
+                if (checked && error === 'Подтвердите правила безопасного использования AI-помощника перед созданием документа.') {
+                  setError('');
+                }
+              }}
+            />
+
+            {error && (
+              <div className="flex items-start gap-2 rounded-lg border border-red-200 bg-red-50 px-3 py-2 text-sm text-red-700">
+                <AlertCircle className="mt-0.5 h-4 w-4 flex-shrink-0" />
+                <span>{error}</span>
+              </div>
+            )}
+
             <div className="flex gap-3 pt-2">
-              <Button onClick={handleGenerate} disabled={!canGenerate || generating} className="flex-1">
-                <Sparkles className="w-4 h-4" />
+              <Button onClick={() => void handleGenerate()} disabled={!canGenerate || generating || !aiRulesAccepted} className="flex-1">
+                {generating ? <Loader2 className="w-4 h-4 animate-spin" /> : <Sparkles className="w-4 h-4" />}
                 {generating ? 'Создаётся...' : 'Создать'}
               </Button>
               <Button variant="secondary" onClick={handleClear}>
@@ -176,27 +236,26 @@ export function CreateMode({ hasSubscription, onNavigate }: CreateModeProps) {
                     <strong>Цель:</strong> {form.goal}
                   </p>
                 )}
-                <div className="mt-4 space-y-2 text-sm text-gray-700 leading-relaxed">
-                  <p>Содержание документа будет сгенерировано на основе ваших параметров. Здесь будет полный текст документа, готовый к скачиванию и использованию.</p>
-                  <p>Документ соответствует требованиям ФОП ДО и учитывает особенности указанной возрастной группы.</p>
+                <div className="mt-4 whitespace-pre-wrap text-sm text-gray-700 leading-relaxed">
+                  {generatedText}
                 </div>
               </div>
             </div>
 
             <div className="grid grid-cols-2 sm:grid-cols-4 gap-2">
-              <Button size="sm" variant="secondary">
+              <Button size="sm" variant="secondary" disabled title="Сохранение появится отдельным шагом">
                 <Save className="w-4 h-4" />
                 Сохранить
               </Button>
-              <Button size="sm" variant="secondary">
+              <Button size="sm" variant="secondary" disabled title="Скачивание появится отдельным шагом">
                 <Download className="w-4 h-4" />
                 Скачать
               </Button>
-              <Button size="sm" variant="secondary">
+              <Button size="sm" variant="secondary" disabled title="Доработка появится отдельным шагом">
                 <Wand2 className="w-4 h-4" />
                 Улучшить
               </Button>
-              <Button size="sm" variant="secondary">
+              <Button size="sm" variant="secondary" disabled title="Доработка появится отдельным шагом">
                 <PenLine className="w-4 h-4" />
                 Доработать
               </Button>

@@ -1,7 +1,9 @@
 import { useState } from 'react';
-import { Send, Sparkles, Crown, Lock, X } from 'lucide-react';
+import { AlertCircle, Loader2, Send, Sparkles, Crown, Lock, X } from 'lucide-react';
 import { Card } from '../../components/Card';
 import { Button } from '../../components/Button';
+import { AiSafetyNotice } from '../../components/AiSafetyNotice';
+import { requestAssistantAnswer } from './requestAssistant';
 
 interface AskModeProps {
   hasSubscription: boolean;
@@ -26,11 +28,9 @@ const QUICK_ACTIONS = ['Нужно занятие', 'Нужен документ
 
 const HOW_IT_WORKS = [
   'Напишите, что нужно подготовить',
-  'Помощник уточнит детали',
+  'Подтвердите правила безопасного использования',
   'Вы получите подсказку, подборку или черновик',
 ];
-
-const PROTOTYPE_RESPONSE = 'Запрос принят. В рабочей версии помощник подготовит ответ или черновик документа. Сейчас раздел работает в тестовом режиме — ответ будет доступен после запуска.';
 
 const chipClass = (selected: boolean) =>
   `px-3 py-1.5 rounded-full text-xs border transition-colors cursor-pointer ${
@@ -46,6 +46,9 @@ export function AskMode({ hasSubscription, onNavigate }: AskModeProps) {
   const [selectedProgram, setSelectedProgram] = useState('');
   const [selectedDevFeature, setSelectedDevFeature] = useState('');
   const [showGate, setShowGate] = useState(false);
+  const [aiRulesAccepted, setAiRulesAccepted] = useState(false);
+  const [sending, setSending] = useState(false);
+  const [error, setError] = useState('');
 
   const buildPromptContext = () => {
     const parts: string[] = [];
@@ -55,19 +58,38 @@ export function AskMode({ hasSubscription, onNavigate }: AskModeProps) {
     return parts.length > 0 ? ` [${parts.join(', ')}]` : '';
   };
 
-  const handleSend = () => {
+  const handleSend = async () => {
     if (!input.trim()) return;
     if (!hasSubscription) {
       setShowGate(true);
       return;
     }
+
+    if (!aiRulesAccepted) {
+      setError('Подтвердите правила безопасного использования AI-помощника перед отправкой запроса.');
+      return;
+    }
+
     const context = buildPromptContext();
-    setMessages([
-      ...messages,
-      { role: 'user', content: input + context },
-      { role: 'assistant', content: PROTOTYPE_RESPONSE },
-    ]);
+    const userMessage = input.trim() + context;
     setInput('');
+    setError('');
+    setSending(true);
+    setMessages((current) => [...current, { role: 'user', content: userMessage }]);
+
+    try {
+      const answer = await requestAssistantAnswer(userMessage);
+      setMessages((current) => [...current, { role: 'assistant', content: answer }]);
+    } catch (requestError) {
+      const message =
+        requestError instanceof Error
+          ? requestError.message
+          : 'Не удалось получить ответ помощника. Попробуйте ещё раз.';
+      setError(message);
+      setMessages((current) => [...current, { role: 'assistant', content: message }]);
+    } finally {
+      setSending(false);
+    }
   };
 
   const handleChip = (chip: string) => {
@@ -180,7 +202,7 @@ export function AskMode({ hasSubscription, onNavigate }: AskModeProps) {
                   {msg.role === 'assistant' && (
                     <div className="flex items-center gap-2 mb-2">
                       <Sparkles className="w-4 h-4 text-green-500" />
-                      <span className="text-sm font-medium text-gray-500">Помощник · тестовый режим</span>
+                      <span className="text-sm font-medium text-gray-500">AI-помощник</span>
                     </div>
                   )}
                   <p className="leading-relaxed text-sm">{msg.content}</p>
@@ -193,6 +215,16 @@ export function AskMode({ hasSubscription, onNavigate }: AskModeProps) {
 
       <Card hover={false} className="bg-white">
         <div className="space-y-3">
+          <AiSafetyNotice
+            checked={aiRulesAccepted}
+            onChange={(checked) => {
+              setAiRulesAccepted(checked);
+              if (checked && error === 'Подтвердите правила безопасного использования AI-помощника перед отправкой запроса.') {
+                setError('');
+              }
+            }}
+          />
+
           <div className="grid grid-cols-1 sm:grid-cols-3 gap-2">
             <div>
               <p className="text-xs text-gray-500 mb-1.5 font-medium">Возраст</p>
@@ -230,17 +262,29 @@ export function AskMode({ hasSubscription, onNavigate }: AskModeProps) {
             </div>
           )}
 
+          {error && (
+            <div className="flex items-start gap-2 rounded-lg border border-red-200 bg-red-50 px-3 py-2 text-sm text-red-700">
+              <AlertCircle className="mt-0.5 h-4 w-4 flex-shrink-0" />
+              <span>{error}</span>
+            </div>
+          )}
+
           <div className="flex gap-3">
             <input
               type="text"
               value={input}
               onChange={(e) => setInput(e.target.value)}
-              onKeyPress={(e) => e.key === 'Enter' && handleSend()}
+              onKeyDown={(e) => {
+                if (e.key === 'Enter' && !sending) {
+                  void handleSend();
+                }
+              }}
               placeholder="Опишите, что вам нужно..."
+              disabled={sending}
               className="flex-1 px-4 py-3 border border-gray-300 rounded-lg focus:border-green-500 focus:ring-2 focus:ring-green-100 outline-none transition-all text-sm"
             />
-            <Button onClick={handleSend} disabled={!input.trim()}>
-              <Send className="w-5 h-5" />
+            <Button onClick={() => void handleSend()} disabled={!input.trim() || sending || (hasSubscription && !aiRulesAccepted)}>
+              {sending ? <Loader2 className="w-5 h-5 animate-spin" /> : <Send className="w-5 h-5" />}
             </Button>
           </div>
         </div>

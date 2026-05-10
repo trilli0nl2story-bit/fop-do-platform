@@ -31,13 +31,13 @@ export function Assistant({ hasSubscription, onNavigate }: AssistantProps) {
           <div>
             <div className="flex items-center gap-2 flex-wrap">
               <h1 className="text-2xl font-bold text-gray-900">Помощник методического кабинета</h1>
-              <span className="text-xs font-medium px-2 py-0.5 rounded-full bg-gray-100 text-gray-500 border border-gray-200">тестовый режим</span>
+              <span className="text-xs font-medium px-2 py-0.5 rounded-full bg-green-50 text-green-700 border border-green-200">AI включён</span>
             </div>
             <p className="text-sm text-gray-600">Выберите режим работы</p>
           </div>
         </div>
         <div className="px-4 py-3 bg-gray-50 border border-gray-200 rounded-xl text-sm text-gray-600 leading-relaxed">
-          Помощник помогает сформулировать запрос, подобрать материал и подготовить черновик документа. Сейчас раздел работает в тестовом режиме.
+          Помощник отвечает на методические вопросы, помогает сформулировать запрос, подобрать материал и подготовить черновик. Не вводите персональные данные детей, родителей, сотрудников ДОУ и третьих лиц.
         </div>
 
         <div className="flex gap-2 overflow-x-auto pb-1 mt-3">

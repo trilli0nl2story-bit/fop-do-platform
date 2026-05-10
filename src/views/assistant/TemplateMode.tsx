@@ -1,10 +1,12 @@
 import { useState } from 'react';
-import { FileText, BookOpen, ClipboardList, Calendar, BarChart3, UserCheck, ArrowLeft, Save, Download, Wand2, PenLine, Sparkles, RotateCcw, Crown, Lock, X } from 'lucide-react';
+import { AlertCircle, FileText, BookOpen, ClipboardList, Calendar, BarChart3, UserCheck, ArrowLeft, Save, Download, Wand2, PenLine, Sparkles, RotateCcw, Crown, Lock, X, Loader2 } from 'lucide-react';
 import { Card } from '../../components/Card';
 import { Button } from '../../components/Button';
 import { Input } from '../../components/Input';
 import { Select } from '../../components/Select';
 import { Textarea } from '../../components/Textarea';
+import { AiSafetyNotice } from '../../components/AiSafetyNotice';
+import { requestAssistantAnswer } from './requestAssistant';
 
 const templates = [
   { id: 'lesson', title: 'Конспект занятия', icon: <FileText className="w-6 h-6" />, color: 'bg-blue-50 text-blue-600' },
@@ -54,25 +56,71 @@ export function TemplateMode({ hasSubscription, onNavigate }: TemplateModeProps)
     goal: '', tasks: '', format: '',
   });
   const [generated, setGenerated] = useState(false);
+  const [generatedText, setGeneratedText] = useState('');
   const [generating, setGenerating] = useState(false);
   const [showGate, setShowGate] = useState(false);
+  const [aiRulesAccepted, setAiRulesAccepted] = useState(false);
+  const [error, setError] = useState('');
 
   const update = (field: string) => (e: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement | HTMLSelectElement>) => {
     setForm(prev => ({ ...prev, [field]: e.target.value }));
   };
 
-  const handleGenerate = () => {
+  const currentTemplate = templates.find(t => t.id === selectedTemplate);
+
+  const buildPrompt = () => {
+    const ageLabel = AGE_OPTIONS.find((item) => item.value === form.age)?.label || form.age;
+    const programLabel = PROGRAM_OPTIONS.find((item) => item.value === form.program)?.label || 'не указана';
+    const featureLabel = DEV_OPTIONS.find((item) => item.value === form.devFeature)?.label || 'без особенностей';
+    const formatLabel = FORMAT_OPTIONS.find((item) => item.value === form.format)?.label || 'текст';
+
+    return [
+      `Собери черновик документа по шаблону: ${currentTemplate?.title ?? 'документ'}.`,
+      `Тема: ${form.topic.trim()}.`,
+      `Возрастная группа: ${ageLabel}.`,
+      `Программа: ${programLabel}.`,
+      `Особенности развития: ${featureLabel}.`,
+      form.goal.trim() ? `Цель: ${form.goal.trim()}.` : '',
+      form.tasks.trim() ? `Задачи: ${form.tasks.trim()}.` : '',
+      `Формат результата: ${formatLabel}.`,
+      'Пиши структурно, практично, без персональных данных детей, родителей и сотрудников.',
+    ].filter(Boolean).join('\n');
+  };
+
+  const handleGenerate = async () => {
     if (!hasSubscription) {
       setShowGate(true);
       return;
     }
+
+    if (!aiRulesAccepted) {
+      setError('Подтвердите правила безопасного использования AI-помощника перед созданием документа.');
+      return;
+    }
+
     setGenerating(true);
-    setTimeout(() => { setGenerating(false); setGenerated(true); }, 1200);
+    setError('');
+
+    try {
+      const answer = await requestAssistantAnswer(buildPrompt());
+      setGeneratedText(answer);
+      setGenerated(true);
+    } catch (requestError) {
+      setError(
+        requestError instanceof Error
+          ? requestError.message
+          : 'Не удалось собрать документ. Попробуйте ещё раз.'
+      );
+    } finally {
+      setGenerating(false);
+    }
   };
 
   const handleClear = () => {
     setForm({ topic: '', age: '', program: '', devFeature: '', goal: '', tasks: '', format: '' });
     setGenerated(false);
+    setGeneratedText('');
+    setError('');
   };
 
   const handleBack = () => {
@@ -82,7 +130,6 @@ export function TemplateMode({ hasSubscription, onNavigate }: TemplateModeProps)
   };
 
   const canGenerate = form.topic.trim() && form.age;
-  const currentTemplate = templates.find(t => t.id === selectedTemplate);
 
   if (!selectedTemplate) {
     return (
@@ -165,9 +212,24 @@ export function TemplateMode({ hasSubscription, onNavigate }: TemplateModeProps)
             <Input label="Цель" placeholder="Основная цель" value={form.goal} onChange={update('goal')} />
             <Textarea label="Задачи" placeholder="Перечислите задачи" value={form.tasks} onChange={update('tasks')} rows={3} />
             <Select label="Формат" options={FORMAT_OPTIONS} value={form.format} onChange={update('format')} />
+            <AiSafetyNotice
+              checked={aiRulesAccepted}
+              onChange={(checked) => {
+                setAiRulesAccepted(checked);
+                if (checked && error === 'Подтвердите правила безопасного использования AI-помощника перед созданием документа.') {
+                  setError('');
+                }
+              }}
+            />
+            {error && (
+              <div className="flex items-start gap-2 rounded-lg border border-red-200 bg-red-50 px-3 py-2 text-sm text-red-700">
+                <AlertCircle className="mt-0.5 h-4 w-4 flex-shrink-0" />
+                <span>{error}</span>
+              </div>
+            )}
             <div className="flex gap-3 pt-2">
-              <Button onClick={handleGenerate} disabled={!canGenerate || generating} className="flex-1">
-                <Sparkles className="w-4 h-4" />
+              <Button onClick={() => void handleGenerate()} disabled={!canGenerate || generating || !aiRulesAccepted} className="flex-1">
+                {generating ? <Loader2 className="w-4 h-4 animate-spin" /> : <Sparkles className="w-4 h-4" />}
                 {generating ? 'Создаётся...' : 'Собрать'}
               </Button>
               <Button variant="secondary" onClick={handleClear}>
@@ -217,17 +279,16 @@ export function TemplateMode({ hasSubscription, onNavigate }: TemplateModeProps)
                 {form.goal && (
                   <p className="text-sm text-gray-600 mb-2"><strong>Цель:</strong> {form.goal}</p>
                 )}
-                <div className="mt-4 space-y-2 text-sm text-gray-700 leading-relaxed">
-                  <p>Документ сформирован по шаблону "{currentTemplate?.title}" с учётом указанных параметров.</p>
-                  <p>Структура и содержание соответствуют требованиям ФОП ДО для выбранной возрастной группы.</p>
+                <div className="mt-4 whitespace-pre-wrap text-sm text-gray-700 leading-relaxed">
+                  {generatedText}
                 </div>
               </div>
 
               <div className="grid grid-cols-2 sm:grid-cols-4 gap-2">
-                <Button size="sm" variant="secondary"><Save className="w-4 h-4" />Сохранить</Button>
-                <Button size="sm" variant="secondary"><Download className="w-4 h-4" />Скачать</Button>
-                <Button size="sm" variant="secondary"><Wand2 className="w-4 h-4" />Улучшить</Button>
-                <Button size="sm" variant="secondary"><PenLine className="w-4 h-4" />Доработать</Button>
+                <Button size="sm" variant="secondary" disabled title="Сохранение появится отдельным шагом"><Save className="w-4 h-4" />Сохранить</Button>
+                <Button size="sm" variant="secondary" disabled title="Скачивание появится отдельным шагом"><Download className="w-4 h-4" />Скачать</Button>
+                <Button size="sm" variant="secondary" disabled title="Доработка появится отдельным шагом"><Wand2 className="w-4 h-4" />Улучшить</Button>
+                <Button size="sm" variant="secondary" disabled title="Доработка появится отдельным шагом"><PenLine className="w-4 h-4" />Доработать</Button>
               </div>
             </Card>
           )}
