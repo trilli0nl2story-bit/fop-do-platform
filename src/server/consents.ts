@@ -1,6 +1,5 @@
 import type { PoolClient } from 'pg';
-import type { NextRequest } from 'next/server';
-import { query } from './db';
+import { query, withTransaction } from './db';
 import { getClientIp } from './security';
 import { getLegalDocument, type LegalDocumentSlug } from '../config/legalDocuments';
 
@@ -26,6 +25,17 @@ interface RecordConsentParams {
   documentSlug: LegalDocumentSlug;
   sourceUrl?: string | null;
   metadata?: Record<string, unknown>;
+}
+
+interface StoreCheckoutConsentParams {
+  userId: string;
+  email?: string | null;
+  sourceUrl?: string | null;
+  metadata: Record<string, unknown> & {
+    orderId: string;
+    paymentId: string;
+    totalRubles: number;
+  };
 }
 
 let consentsTableReady: Promise<void> | null = null;
@@ -72,13 +82,13 @@ function truncate(value: string | null | undefined, maxLength: number): string |
   return trimmed.slice(0, maxLength);
 }
 
-function sourceUrlFromRequest(request: NextRequest): string {
+function sourceUrlFromRequest(request: Request): string {
   return request.headers.get('referer') ?? request.url;
 }
 
 export async function recordConsent(
   params: RecordConsentParams,
-  request: NextRequest,
+  request: Request,
   client?: PoolClient
 ): Promise<void> {
   const document = getLegalDocument(params.documentSlug);
@@ -120,4 +130,72 @@ export async function recordConsent(
   }
 
   await query(sql, values);
+}
+
+export async function recordStoreCheckoutConsents(
+  params: StoreCheckoutConsentParams,
+  request: Request
+): Promise<void> {
+  await ensureConsentsTable();
+
+  await withTransaction(async (client) => {
+    await recordConsent(
+      {
+        userId: params.userId,
+        email: params.email,
+        formName: 'store_checkout',
+        consentType: 'offer',
+        documentSlug: 'offer',
+        sourceUrl: params.sourceUrl,
+        metadata: params.metadata,
+      },
+      request,
+      client
+    );
+
+    await recordConsent(
+      {
+        userId: params.userId,
+        email: params.email,
+        formName: 'store_checkout',
+        consentType: 'refund',
+        documentSlug: 'refund',
+        sourceUrl: params.sourceUrl,
+        metadata: params.metadata,
+      },
+      request,
+      client
+    );
+  });
+}
+
+type ConsentTypeRow = {
+  consent_type: ConsentType;
+};
+
+export async function hasStoreCheckoutConsents(params: {
+  userId: string;
+  orderId: string;
+  client?: PoolClient;
+}): Promise<boolean> {
+  await ensureConsentsTable();
+
+  const sql = `
+    SELECT DISTINCT consent_type
+    FROM consents
+    WHERE user_id = $1
+      AND form_name = 'store_checkout'
+      AND metadata->>'orderId' = $2
+      AND (
+        (consent_type = 'offer' AND document_slug = 'offer')
+        OR (consent_type = 'refund' AND document_slug = 'refund')
+      )
+  `;
+  const values = [params.userId, params.orderId];
+  const result = params.client
+    ? await params.client.query<ConsentTypeRow>(sql, values)
+    : await query<ConsentTypeRow>(sql, values);
+  const types = new Set(result.rows.map((row) => row.consent_type));
+
+  return types.has('offer') && types.has('refund');
 }

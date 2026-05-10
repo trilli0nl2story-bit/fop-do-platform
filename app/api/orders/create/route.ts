@@ -1,5 +1,6 @@
 import { NextResponse } from 'next/server';
 import { getCurrentUser } from '@/src/server/auth';
+import { recordStoreCheckoutConsents } from '@/src/server/consents';
 import { createStoreOrderCheckout, CheckoutError } from '@/src/server/orders';
 import {
   consumeRequestRateLimit,
@@ -12,7 +13,19 @@ export const dynamic = 'force-dynamic';
 type CreateOrderBody = {
   items?: Array<{ slug?: string }>;
   referralCode?: string | null;
+  consents?: {
+    offer?: boolean;
+    refund?: boolean;
+  };
+  offerConsent?: boolean;
+  refundConsent?: boolean;
 };
+
+function hasCheckoutConsent(body: CreateOrderBody): boolean {
+  const offer = body.consents?.offer === true || body.offerConsent === true;
+  const refund = body.consents?.refund === true || body.refundConsent === true;
+  return offer && refund;
+}
 
 export async function POST(request: Request) {
   const originError = requireTrustedOrigin(request);
@@ -40,6 +53,16 @@ export async function POST(request: Request) {
     const body = await request.json() as CreateOrderBody;
     const items = Array.isArray(body.items) ? body.items : [];
 
+    if (!hasCheckoutConsent(body)) {
+      return NextResponse.json(
+        {
+          error: 'missing_consent',
+          message: 'Подтвердите условия оферты, цифрового доступа и возврата перед оплатой.',
+        },
+        { status: 400 }
+      );
+    }
+
     const checkout = await createStoreOrderCheckout({
       userId: sessionUser.id,
       items: items
@@ -47,6 +70,22 @@ export async function POST(request: Request) {
         .filter((item) => item.slug.trim().length > 0),
       referralCode: typeof body.referralCode === 'string' ? body.referralCode : null,
       requestOrigin: new URL(request.url).origin,
+      beforePaymentReady: async (payment) => {
+        await recordStoreCheckoutConsents(
+          {
+            userId: sessionUser.id,
+            email: sessionUser.email,
+            sourceUrl: request.headers.get('referer') ?? '/korzina',
+            metadata: {
+              orderId: payment.orderId,
+              paymentId: payment.paymentId,
+              totalRubles: payment.totalRubles,
+              itemCount: items.length,
+            },
+          },
+          request
+        );
+      },
     });
 
     return NextResponse.json({

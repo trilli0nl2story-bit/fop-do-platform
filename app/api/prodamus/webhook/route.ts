@@ -1,5 +1,6 @@
 import { NextResponse } from 'next/server';
 import { query, withTransaction } from '@/src/server/db';
+import { hasStoreCheckoutConsents } from '@/src/server/consents';
 import { getProdamusConfig, verifyProdamusSignature } from '@/src/server/prodamus';
 import { markReferralClaimPaid } from '@/src/server/referrals';
 import { activateSubscriptionFromPayment } from '@/src/server/subscriptions';
@@ -127,6 +128,25 @@ export async function POST(request: Request) {
 
     const providerPaymentId = extractProviderPaymentId(payload);
     const successful = isPaymentSuccessful(payload);
+    const paymentKind =
+      typeof payment.raw_payload?.kind === 'string'
+        ? payment.raw_payload.kind
+        : 'store_order';
+
+    if (successful && paymentKind !== 'subscription') {
+      const hasCheckoutConsents = await hasStoreCheckoutConsents({
+        userId: order.user_id,
+        orderId,
+      });
+
+      if (!hasCheckoutConsents) {
+        return NextResponse.json(
+          { error: 'missing_checkout_consent', message: 'Store checkout consents are missing for this order.' },
+          { status: 409 }
+        );
+      }
+    }
+
     let storeOrderEmailOrderId: string | null = null;
     let subscriptionEmail:
       | {
@@ -175,11 +195,6 @@ export async function POST(request: Request) {
         `,
         [orderId]
       );
-
-      const paymentKind =
-        typeof payment.raw_payload?.kind === 'string'
-          ? payment.raw_payload.kind
-          : 'store_order';
 
       if (paymentKind === 'subscription') {
         const planId =

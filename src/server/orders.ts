@@ -9,6 +9,7 @@ import {
 import { getAppOrigin } from './appOrigin';
 import { claimReferralForOrder } from './referrals';
 import { buildProdamusPayformUrl, isProdamusConfigured } from './prodamus';
+import { hasStoreCheckoutConsents } from './consents';
 
 export class CheckoutError extends Error {
   status: number;
@@ -63,7 +64,7 @@ type PaymentStatusRow = {
   provider_payment_id: string | null;
   amount: number | string;
   paid_at: string | null;
-  raw_payload: { payformUrl?: string } | null;
+  raw_payload: { kind?: string; payformUrl?: string } | null;
 };
 
 type PendingOrderCandidateRow = {
@@ -84,6 +85,12 @@ export interface CreateOrderResult {
   paymentUrl: string;
   totalRubles: number;
 }
+
+type BeforePaymentReadyParams = {
+  orderId: string;
+  paymentId: string;
+  totalRubles: number;
+};
 
 export interface UserOrderStatus {
   order: {
@@ -388,6 +395,7 @@ export async function createStoreOrderCheckout(params: {
   items: CartQuoteInputItem[];
   referralCode?: string | null;
   requestOrigin: string;
+  beforePaymentReady?: (payment: BeforePaymentReadyParams) => Promise<void>;
 }): Promise<CreateOrderResult> {
   if (!isProdamusConfigured()) {
     throw new CheckoutError(
@@ -456,6 +464,14 @@ export async function createStoreOrderCheckout(params: {
     return { ...created, reused: null };
   });
 
+  const totalRubles = kopecksToRubles(Number(order.total_amount ?? 0));
+
+  await params.beforePaymentReady?.({
+    orderId: order.id,
+    paymentId: payment.id,
+    totalRubles,
+  });
+
   let paymentUrl = reused?.paymentUrl ?? null;
   if (!paymentUrl) {
     paymentUrl = buildPaymentUrl({
@@ -486,7 +502,7 @@ export async function createStoreOrderCheckout(params: {
     orderId: order.id,
     paymentId: payment.id,
     paymentUrl,
-    totalRubles: kopecksToRubles(Number(order.total_amount ?? 0)),
+    totalRubles,
   };
 }
 
@@ -536,9 +552,20 @@ export async function getUserOrderStatus(
   ]);
 
   const payment = paymentResult.rows[0];
+  const paymentKind =
+    typeof payment?.raw_payload?.kind === 'string'
+      ? payment.raw_payload.kind
+      : 'store_order';
+  const requiresCheckoutConsents = paymentKind !== 'subscription';
+  const hasCheckoutConsents =
+    payment?.status === 'pending' && order.status === 'pending' && requiresCheckoutConsents
+      ? await hasStoreCheckoutConsents({ userId, orderId })
+      : true;
+
   const resumePaymentUrl =
     payment?.status === 'pending' &&
     order.status === 'pending' &&
+    hasCheckoutConsents &&
     payment.provider === 'prodamus' &&
     typeof payment.raw_payload?.payformUrl === 'string' &&
     payment.raw_payload.payformUrl.trim()

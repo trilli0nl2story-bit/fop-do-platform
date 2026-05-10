@@ -11,6 +11,7 @@ import {
 import { Card } from '../components/Card';
 import { Button } from '../components/Button';
 import { Input } from '../components/Input';
+import { OfferConsentCheckbox } from '../components/OfferConsentCheckbox';
 import { useCart } from '../context/CartContext';
 
 interface CartProps {
@@ -48,6 +49,7 @@ export function Cart({ onNavigate, isAuthenticated }: CartProps) {
   const [checkoutLoading, setCheckoutLoading] = useState(false);
   const [checkoutError, setCheckoutError] = useState<string | null>(null);
   const [checkoutNotice, setCheckoutNotice] = useState<string | null>(null);
+  const [offerConsent, setOfferConsent] = useState(false);
 
   useEffect(() => {
     setReferralDraft(referralCode);
@@ -140,6 +142,11 @@ export function Cart({ onNavigate, isAuthenticated }: CartProps) {
       return;
     }
 
+    if (!offerConsent) {
+      setCheckoutError('Подтвердите условия оферты, цифрового доступа и возврата перед оплатой.');
+      return;
+    }
+
     setCheckoutLoading(true);
     setCheckoutError(null);
     setCheckoutNotice(null);
@@ -156,6 +163,10 @@ export function Cart({ onNavigate, isAuthenticated }: CartProps) {
             .map((item) => ({ slug: item.slug?.trim() ?? '' }))
             .filter((item) => item.slug.length > 0),
           referralCode: referralCode.trim() || null,
+          consents: {
+            offer: offerConsent,
+            refund: offerConsent,
+          },
         }),
       });
 
@@ -356,13 +367,27 @@ export function Cart({ onNavigate, isAuthenticated }: CartProps) {
               </div>
             </div>
 
+            <div className="mb-4">
+              <OfferConsentCheckbox
+                checked={offerConsent}
+                onChange={(checked) => {
+                  setOfferConsent(checked);
+                  if (checked && checkoutError === 'Подтвердите условия оферты, цифрового доступа и возврата перед оплатой.') {
+                    setCheckoutError(null);
+                  }
+                }}
+                onNavigate={onNavigate}
+              />
+            </div>
+
             <Button
               className="w-full"
               size="lg"
               onClick={handleCheckout}
               disabled={
                 checkoutLoading ||
-                !checkoutReady
+                !checkoutReady ||
+                (isAuthenticated && !offerConsent)
               }
             >
               <CreditCard className="w-5 h-5" />
