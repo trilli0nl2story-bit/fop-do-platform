@@ -1,8 +1,8 @@
 import { useState } from 'react';
-import { ConsentCheckbox } from '../components/ConsentCheckbox';
 import { Check, Download } from 'lucide-react';
 import { saveProfile, loadProfile } from '../lib/userProfile';
 import { TurnstileField, isTurnstileEnabled } from '../components/TurnstileField';
+import { RegistrationConsentFields } from '../components/RegistrationConsentFields';
 
 interface RegisterProps {
   onNavigate: (page: string) => void;
@@ -26,7 +26,9 @@ export function Register({ onNavigate, onRegister, downloadContext }: RegisterPr
   const [password, setPassword] = useState('');
   const [city, setCity] = useState('');
   const [selectedRole, setSelectedRole] = useState('');
-  const [consentGiven, setConsentGiven] = useState(false);
+  const [personalDataConsent, setPersonalDataConsent] = useState(false);
+  const [termsConsent, setTermsConsent] = useState(false);
+  const [marketingConsent, setMarketingConsent] = useState(false);
   const [captchaToken, setCaptchaToken] = useState('');
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
@@ -40,7 +42,8 @@ export function Register({ onNavigate, onRegister, downloadContext }: RegisterPr
     password.length >= 8 &&
     city.trim().length > 0 &&
     selectedRole !== '' &&
-    consentGiven &&
+    personalDataConsent &&
+    termsConsent &&
     (!captchaRequired || captchaToken.trim().length > 0) &&
     !loading;
 
@@ -64,6 +67,11 @@ export function Register({ onNavigate, onRegister, downloadContext }: RegisterPr
           email: email.trim(),
           password,
           captchaToken,
+          consents: {
+            personalData: personalDataConsent,
+            terms: termsConsent,
+            marketing: marketingConsent,
+          },
         }),
       });
 
@@ -73,7 +81,7 @@ export function Register({ onNavigate, onRegister, downloadContext }: RegisterPr
         if (res.status >= 500) {
           setError(SERVER_NOT_READY);
         } else {
-          setError(data.error ?? 'Не удалось создать аккаунт. Попробуйте позже.');
+          setError(data.message ?? data.error ?? 'Не удалось создать аккаунт. Попробуйте позже.');
         }
         return;
       }
@@ -203,9 +211,13 @@ export function Register({ onNavigate, onRegister, downloadContext }: RegisterPr
               />
             </div>
 
-            <ConsentCheckbox
-              checked={consentGiven}
-              onChange={setConsentGiven}
+            <RegistrationConsentFields
+              personalDataConsent={personalDataConsent}
+              termsConsent={termsConsent}
+              marketingConsent={marketingConsent}
+              onPersonalDataChange={setPersonalDataConsent}
+              onTermsChange={setTermsConsent}
+              onMarketingChange={setMarketingConsent}
               onNavigate={onNavigate}
             />
 

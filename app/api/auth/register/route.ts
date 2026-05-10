@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { query } from '@/src/server/db';
+import { query, withTransaction } from '@/src/server/db';
 import {
   createSessionToken,
   getSessionUserById,
@@ -9,11 +9,30 @@ import {
 import { verifyCaptchaToken } from '@/src/server/captcha';
 import { issueEmailVerification } from '@/src/server/emailVerification';
 import { ensureUserReferralProfile } from '@/src/server/referrals';
+import { ensureConsentsTable, recordConsent } from '@/src/server/consents';
 import {
   consumeRequestRateLimit,
   rateLimitResponse,
   requireTrustedOrigin,
 } from '@/src/server/security';
+
+function boolFromBody(value: unknown): boolean {
+  return value === true;
+}
+
+function getConsentFlags(body: Record<string, unknown>) {
+  const nested = body.consents && typeof body.consents === 'object'
+    ? body.consents as Record<string, unknown>
+    : {};
+  const legacyCombinedConsent = boolFromBody(body.consent);
+
+  return {
+    personalData: boolFromBody(nested.personalData) || boolFromBody(body.personalDataConsent) || legacyCombinedConsent,
+    terms: boolFromBody(nested.terms) || boolFromBody(body.termsConsent) || legacyCombinedConsent,
+    marketing: boolFromBody(nested.marketing) || boolFromBody(body.marketingConsent),
+    legacyCombinedConsent,
+  };
+}
 
 export async function POST(req: NextRequest) {
   const originError = requireTrustedOrigin(req);
@@ -47,6 +66,7 @@ export async function POST(req: NextRequest) {
   }
 
   const { name, role, city, email, password } = body;
+  const consentFlags = getConsentFlags(body);
 
   if (typeof email !== 'string' || !email.trim()) {
     return NextResponse.json({ error: 'Email обязателен' }, { status: 400 });
@@ -55,6 +75,16 @@ export async function POST(req: NextRequest) {
   if (typeof password !== 'string' || password.length < 8) {
     return NextResponse.json(
       { error: 'Пароль должен содержать не менее 8 символов' },
+      { status: 400 }
+    );
+  }
+
+  if (!consentFlags.personalData || !consentFlags.terms) {
+    return NextResponse.json(
+      {
+        error: 'missing_consent',
+        message: 'Нужно подтвердить согласие на обработку персональных данных и пользовательское соглашение.',
+      },
       { status: 400 }
     );
   }
@@ -86,36 +116,98 @@ export async function POST(req: NextRequest) {
       );
     }
 
+    await ensureConsentsTable();
+
     const passwordHash = await hashPassword(password);
 
-    const {
-      rows: [user],
-    } = await query<{
-      id: string;
-      email: string;
-    }>(
-      `
-        INSERT INTO users (email, password_hash, is_admin, email_verified_at, created_at, updated_at)
-        VALUES ($1, $2, false, null, now(), now())
-        RETURNING id, email
-      `,
-      [normalizedEmail, passwordHash]
-    );
+    const user = await withTransaction(async (client) => {
+      const {
+        rows: [createdUser],
+      } = await client.query<{
+        id: string;
+        email: string;
+      }>(
+        `
+          INSERT INTO users (email, password_hash, is_admin, email_verified_at, created_at, updated_at)
+          VALUES ($1, $2, false, null, now(), now())
+          RETURNING id, email
+        `,
+        [normalizedEmail, passwordHash]
+      );
 
-    await query(
-      `
-        INSERT INTO user_profiles (id, name, role, city, updated_at)
-        VALUES ($1, $2, $3, $4, now())
-      `,
-      [
-        user.id,
-        typeof name === 'string' ? name.trim() : '',
-        typeof role === 'string' ? role.trim() : '',
-        typeof city === 'string' ? city.trim() : '',
-      ]
-    );
+      await client.query(
+        `
+          INSERT INTO user_profiles (id, name, role, city, updated_at)
+          VALUES ($1, $2, $3, $4, now())
+        `,
+        [
+          createdUser.id,
+          typeof name === 'string' ? name.trim() : '',
+          typeof role === 'string' ? role.trim() : '',
+          typeof city === 'string' ? city.trim() : '',
+        ]
+      );
 
-    await ensureUserReferralProfile(user.id, user.email);
+      const registrationMetadata = {
+        formVersion: 'registration-2026-05',
+        legacyCombinedConsent: consentFlags.legacyCombinedConsent,
+      };
+
+      await recordConsent(
+        {
+          userId: createdUser.id,
+          email: createdUser.email,
+          formName: 'registration',
+          consentType: 'personal_data',
+          documentSlug: 'personal-data-consent',
+          metadata: {
+            ...registrationMetadata,
+            linkedDocumentSlugs: ['privacy-policy'],
+          },
+        },
+        req,
+        client
+      );
+
+      await recordConsent(
+        {
+          userId: createdUser.id,
+          email: createdUser.email,
+          formName: 'registration',
+          consentType: 'terms',
+          documentSlug: 'terms',
+          metadata: registrationMetadata,
+        },
+        req,
+        client
+      );
+
+      if (consentFlags.marketing) {
+        await recordConsent(
+          {
+            userId: createdUser.id,
+            email: createdUser.email,
+            formName: 'registration',
+            consentType: 'marketing',
+            documentSlug: 'marketing-consent',
+            metadata: registrationMetadata,
+          },
+          req,
+          client
+        );
+      }
+
+      return createdUser;
+    });
+
+    try {
+      await ensureUserReferralProfile(user.id, user.email);
+    } catch (referralError) {
+      console.error(
+        '[api/auth/register] referral profile setup failed',
+        referralError instanceof Error ? referralError.message : String(referralError)
+      );
+    }
 
     let delivery: { delivered: boolean; mode: 'smtp' | 'disabled' } = {
       delivered: false,
