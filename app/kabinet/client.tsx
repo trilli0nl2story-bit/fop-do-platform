@@ -3,7 +3,7 @@
 import { useState, useEffect } from 'react';
 import { useRouter, useSearchParams } from 'next/navigation';
 import Link from 'next/link';
-import { LogOut, BookOpen, Star, FileText, ShoppingBag, User, MapPin, Briefcase, Building, Download, Loader2, CheckCircle2, Share2, Bot, Package, HelpCircle, ChevronRight } from 'lucide-react';
+import { LogOut, BookOpen, Star, FileText, ShoppingBag, User, MapPin, Briefcase, Building, Download, Loader2, CheckCircle2, Share2, Bot, Package, HelpCircle, ChevronRight, ShieldCheck, Mail, FileDown, Trash2, RotateCcw } from 'lucide-react';
 import { useAuthSession } from '../../src/hooks/useAuthSession';
 
 interface AccountSummary {
@@ -104,6 +104,21 @@ interface UserOrderDetail {
   }>;
 }
 
+type PrivacyRequestType = 'data_export' | 'account_deletion' | 'consent_withdrawal';
+
+interface AccountPrivacy {
+  settings: {
+    marketingOptIn: boolean;
+    marketingUpdatedAt: string | null;
+  };
+  recentRequests: Array<{
+    id: string;
+    requestType: PrivacyRequestType;
+    status: 'new' | 'in_progress' | 'completed' | 'rejected';
+    createdAt: string;
+  }>;
+}
+
 interface KabinetClientProps {
   section?: 'dashboard' | 'profile';
 }
@@ -136,6 +151,19 @@ const PAYMENT_STATUS_LABELS: Record<string, string> = {
   succeeded: 'Оплачен',
   failed: 'Ошибка',
   refunded: 'Возврат',
+};
+
+const PRIVACY_REQUEST_LABELS: Record<PrivacyRequestType, string> = {
+  data_export: 'Копия данных',
+  account_deletion: 'Удаление или обезличивание',
+  consent_withdrawal: 'Отзыв согласия',
+};
+
+const PRIVACY_REQUEST_STATUS_LABELS: Record<AccountPrivacy['recentRequests'][number]['status'], string> = {
+  new: 'Получено',
+  in_progress: 'В работе',
+  completed: 'Выполнено',
+  rejected: 'Отклонено',
 };
 
 const AUTHOR_STATUS_LABELS: Record<string, string> = {
@@ -183,6 +211,12 @@ export function KabinetClient({ section = 'dashboard' }: KabinetClientProps) {
   const [expandedOrderId, setExpandedOrderId] = useState('');
   const [orderDetails, setOrderDetails] = useState<Record<string, UserOrderDetail | null>>({});
   const [orderDetailsLoadingId, setOrderDetailsLoadingId] = useState('');
+  const [privacy, setPrivacy] = useState<AccountPrivacy | null>(null);
+  const [privacyLoading, setPrivacyLoading] = useState(false);
+  const [privacySaving, setPrivacySaving] = useState(false);
+  const [privacyRequestLoading, setPrivacyRequestLoading] = useState<PrivacyRequestType | ''>('');
+  const [privacyMessage, setPrivacyMessage] = useState('');
+  const [privacyError, setPrivacyError] = useState('');
 
   async function loadSummary() {
     setSummaryLoading(true);
@@ -208,6 +242,93 @@ export function KabinetClient({ section = 'dashboard' }: KabinetClientProps) {
       setSummaryError('Не удалось загрузить данные кабинета. Попробуйте обновить страницу.');
     } finally {
       setSummaryLoading(false);
+    }
+  }
+
+  async function loadPrivacy() {
+    setPrivacyLoading(true);
+    setPrivacyError('');
+    try {
+      const response = await fetch('/api/account/privacy', { credentials: 'include' });
+      const data = await response.json().catch(() => ({}));
+      if (!response.ok) {
+        throw new Error(data.error ?? String(response.status));
+      }
+
+      setPrivacy({
+        settings: data.settings ?? { marketingOptIn: false, marketingUpdatedAt: null },
+        recentRequests: Array.isArray(data.recentRequests) ? data.recentRequests : [],
+      });
+    } catch {
+      setPrivacyError('Не удалось загрузить настройки приватности. Попробуйте обновить страницу.');
+    } finally {
+      setPrivacyLoading(false);
+    }
+  }
+
+  async function handleMarketingPreferenceChange(marketingOptIn: boolean) {
+    setPrivacySaving(true);
+    setPrivacyError('');
+    setPrivacyMessage('');
+
+    try {
+      const response = await fetch('/api/account/privacy', {
+        method: 'PATCH',
+        credentials: 'include',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ marketingOptIn }),
+      });
+      const data = await response.json().catch(() => ({}));
+
+      if (!response.ok) {
+        setPrivacyError(data.message ?? data.error ?? 'Не удалось сохранить настройку рассылки.');
+        return;
+      }
+
+      setPrivacy(prev => ({
+        settings: data.settings ?? {
+          marketingOptIn,
+          marketingUpdatedAt: new Date().toISOString(),
+        },
+        recentRequests: prev?.recentRequests ?? [],
+      }));
+      setPrivacyMessage(
+        marketingOptIn
+          ? 'Согласие на информационные и рекламные сообщения сохранено.'
+          : 'Рассылка отключена. Обязательные сервисные письма по аккаунту и оплатам останутся.'
+      );
+    } catch {
+      setPrivacyError('Не удалось сохранить настройку рассылки. Проверьте соединение и попробуйте ещё раз.');
+    } finally {
+      setPrivacySaving(false);
+    }
+  }
+
+  async function handlePrivacyRequest(requestType: PrivacyRequestType) {
+    setPrivacyRequestLoading(requestType);
+    setPrivacyError('');
+    setPrivacyMessage('');
+
+    try {
+      const response = await fetch('/api/account/privacy/requests', {
+        method: 'POST',
+        credentials: 'include',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ requestType }),
+      });
+      const data = await response.json().catch(() => ({}));
+
+      if (!response.ok) {
+        setPrivacyError(data.message ?? data.error ?? 'Не удалось сохранить обращение.');
+        return;
+      }
+
+      await loadPrivacy();
+      setPrivacyMessage(data.message ?? 'Обращение сохранено. Мы свяжемся с вами по email аккаунта.');
+    } catch {
+      setPrivacyError('Не удалось сохранить обращение. Проверьте соединение и попробуйте ещё раз.');
+    } finally {
+      setPrivacyRequestLoading('');
     }
   }
 
@@ -281,6 +402,11 @@ export function KabinetClient({ section = 'dashboard' }: KabinetClientProps) {
       .then(data => setSummary(data))
       .catch(() => setSummaryError('Не удалось загрузить данные кабинета. Попробуйте обновить страницу.'))
       .finally(() => setSummaryLoading(false));
+  }, [isAuthenticated]);
+
+  useEffect(() => {
+    if (!isAuthenticated) return;
+    loadPrivacy();
   }, [isAuthenticated]);
 
   useEffect(() => {
@@ -825,6 +951,125 @@ export function KabinetClient({ section = 'dashboard' }: KabinetClientProps) {
             )}
           </div>
         </div>
+
+        {isProfileSection && (
+          <div className="bg-white rounded-2xl border border-gray-200 shadow-sm p-6">
+            <div className="flex items-start gap-3">
+              <div className="w-10 h-10 bg-green-50 rounded-xl flex items-center justify-center flex-shrink-0">
+                <ShieldCheck className="w-5 h-5 text-green-600" />
+              </div>
+              <div>
+                <h2 className="text-lg font-bold text-gray-900">Приватность и согласия</h2>
+                <p className="mt-1 text-sm text-gray-600">
+                  Управляйте рассылкой и обращениями по персональным данным. Сервисные письма по входу, оплатам и доступам отправляются независимо от рекламной рассылки.
+                </p>
+              </div>
+            </div>
+
+            {privacyLoading ? (
+              <div className="mt-5 flex items-center gap-2 text-sm text-gray-500">
+                <Loader2 className="w-4 h-4 animate-spin" />
+                Загружаем настройки...
+              </div>
+            ) : (
+              <div className="mt-5 space-y-5">
+                <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4 rounded-xl border border-gray-100 bg-gray-50 px-4 py-4">
+                  <div className="flex items-start gap-3">
+                    <Mail className="w-5 h-5 text-blue-500 mt-0.5 flex-shrink-0" />
+                    <div>
+                      <p className="text-sm font-semibold text-gray-900">Информационная и рекламная рассылка</p>
+                      <p className="mt-1 text-sm text-gray-600">
+                        Материалы, новости проекта, акции и напоминания о подписке. Можно отключить в любой момент.
+                      </p>
+                      <Link href="/legal/marketing-consent" className="mt-2 inline-block text-xs font-medium text-blue-500 hover:text-blue-600">
+                        Условия согласия на рассылку
+                      </Link>
+                    </div>
+                  </div>
+                  <button
+                    type="button"
+                    onClick={() => handleMarketingPreferenceChange(!(privacy?.settings.marketingOptIn ?? false))}
+                    disabled={privacySaving}
+                    className={`w-full sm:w-auto px-4 py-2 text-sm font-semibold rounded-xl transition-colors disabled:opacity-50 ${
+                      privacy?.settings.marketingOptIn
+                        ? 'bg-green-600 hover:bg-green-700 text-white'
+                        : 'bg-white hover:bg-gray-100 text-gray-700 border border-gray-200'
+                    }`}
+                  >
+                    {privacySaving
+                      ? 'Сохраняем...'
+                      : privacy?.settings.marketingOptIn
+                        ? 'Рассылка включена'
+                        : 'Включить рассылку'}
+                  </button>
+                </div>
+
+                <div>
+                  <p className="text-sm font-semibold text-gray-900 mb-3">Обращения по персональным данным</p>
+                  <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+                    <button
+                      type="button"
+                      onClick={() => handlePrivacyRequest('data_export')}
+                      disabled={Boolean(privacyRequestLoading)}
+                      className="text-left rounded-xl border border-gray-200 hover:border-blue-300 bg-white px-4 py-3 transition-colors disabled:opacity-50"
+                    >
+                      <FileDown className="w-5 h-5 text-blue-500 mb-2" />
+                      <span className="block text-sm font-semibold text-gray-900">Запросить копию данных</span>
+                      <span className="mt-1 block text-xs text-gray-500">Подготовим вручную и ответим на email.</span>
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => handlePrivacyRequest('consent_withdrawal')}
+                      disabled={Boolean(privacyRequestLoading)}
+                      className="text-left rounded-xl border border-gray-200 hover:border-amber-300 bg-white px-4 py-3 transition-colors disabled:opacity-50"
+                    >
+                      <RotateCcw className="w-5 h-5 text-amber-500 mb-2" />
+                      <span className="block text-sm font-semibold text-gray-900">Отозвать согласие</span>
+                      <span className="mt-1 block text-xs text-gray-500">Разберём последствия для доступа к кабинету.</span>
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => handlePrivacyRequest('account_deletion')}
+                      disabled={Boolean(privacyRequestLoading)}
+                      className="text-left rounded-xl border border-gray-200 hover:border-red-300 bg-white px-4 py-3 transition-colors disabled:opacity-50"
+                    >
+                      <Trash2 className="w-5 h-5 text-red-500 mb-2" />
+                      <span className="block text-sm font-semibold text-gray-900">Удаление или обезличивание</span>
+                      <span className="mt-1 block text-xs text-gray-500">Проверим оплаченные доступы и обязательства.</span>
+                    </button>
+                  </div>
+                </div>
+
+                {privacy?.recentRequests.length ? (
+                  <div className="rounded-xl border border-gray-100 bg-gray-50 px-4 py-3">
+                    <p className="text-xs font-semibold uppercase tracking-wide text-gray-500 mb-2">Последние обращения</p>
+                    <div className="space-y-2">
+                      {privacy.recentRequests.map((item) => (
+                        <div key={item.id} className="flex items-center justify-between gap-3 text-sm">
+                          <span className="text-gray-700">{PRIVACY_REQUEST_LABELS[item.requestType]}</span>
+                          <span className="text-xs text-gray-500">
+                            {PRIVACY_REQUEST_STATUS_LABELS[item.status]} · {formatDate(item.createdAt)}
+                          </span>
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                ) : null}
+
+                {privacyMessage && (
+                  <p className="text-sm text-green-700 bg-green-50 border border-green-100 rounded-xl px-4 py-3">
+                    {privacyMessage}
+                  </p>
+                )}
+                {privacyError && (
+                  <p className="text-sm text-red-600 bg-red-50 border border-red-100 rounded-xl px-4 py-3">
+                    {privacyError}
+                  </p>
+                )}
+              </div>
+            )}
+          </div>
+        )}
 
         {/* Status cards */}
         <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">

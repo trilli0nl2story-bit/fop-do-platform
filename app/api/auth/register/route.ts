@@ -10,6 +10,7 @@ import { verifyCaptchaToken } from '@/src/server/captcha';
 import { issueEmailVerification } from '@/src/server/emailVerification';
 import { ensureUserReferralProfile } from '@/src/server/referrals';
 import { ensureConsentsTable, recordConsent } from '@/src/server/consents';
+import { ensureAccountPrivacyTables, saveMarketingPreference } from '@/src/server/accountPrivacy';
 import {
   consumeRequestRateLimit,
   rateLimitResponse,
@@ -117,6 +118,7 @@ export async function POST(req: NextRequest) {
     }
 
     await ensureConsentsTable();
+    await ensureAccountPrivacyTables();
 
     const passwordHash = await hashPassword(password);
 
@@ -196,6 +198,16 @@ export async function POST(req: NextRequest) {
           client
         );
       }
+
+      await saveMarketingPreference(
+        {
+          userId: createdUser.id,
+          marketingOptIn: consentFlags.marketing,
+          source: 'registration',
+        },
+        req,
+        client
+      );
 
       return createdUser;
     });
