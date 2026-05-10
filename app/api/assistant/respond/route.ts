@@ -5,7 +5,9 @@ import {
   rateLimitResponse,
   requireTrustedOrigin,
 } from '@/src/server/security';
+import { recordAiRulesConsent } from '@/src/server/consents';
 import { createAssistantReply } from '@/src/server/aiAssistant';
+import { buildAiPromptSafetyMessage, findAiPromptSafetyIssues } from '@/src/server/aiSafety';
 
 export const dynamic = 'force-dynamic';
 
@@ -35,8 +37,21 @@ export async function POST(request: Request) {
       return rateLimitResponse(rateLimit);
     }
 
-    const body = (await request.json().catch(() => null)) as { message?: unknown } | null;
+    const body = (await request.json().catch(() => null)) as {
+      message?: unknown;
+      aiRulesAccepted?: unknown;
+    } | null;
     const message = typeof body?.message === 'string' ? body.message.trim() : '';
+
+    if (body?.aiRulesAccepted !== true) {
+      return NextResponse.json(
+        {
+          error: 'missing_consent',
+          message: 'Подтвердите правила безопасного использования AI-помощника перед отправкой запроса.',
+        },
+        { status: 400 }
+      );
+    }
 
     if (message.length < 10) {
       return NextResponse.json(
@@ -52,9 +67,35 @@ export async function POST(request: Request) {
       );
     }
 
+    const safetyIssues = findAiPromptSafetyIssues(message);
+    if (safetyIssues.length > 0) {
+      return NextResponse.json(
+        {
+          error: 'personal_data_detected',
+          message: buildAiPromptSafetyMessage(safetyIssues),
+        },
+        { status: 400 }
+      );
+    }
+
     const result = await createAssistantReply({
       userId: user.id,
       prompt: message,
+      beforeAssistantRequest: async ({ model, usage }) => {
+        await recordAiRulesConsent(
+          {
+            userId: user.id,
+            email: user.email,
+            sourceUrl: request.headers.get('referer') ?? '/pomoshchnik',
+            metadata: {
+              promptLength: message.length,
+              model,
+              remainingBeforeRequest: usage.remainingThisMonth,
+            },
+          },
+          request
+        );
+      },
     });
 
     return NextResponse.json({

@@ -4,6 +4,7 @@ import { useEffect, useMemo, useState } from 'react';
 import Link from 'next/link';
 import { Bot, Loader2, Lock, Send, ShieldCheck, Sparkles } from 'lucide-react';
 import { useAuthSession } from '../../src/hooks/useAuthSession';
+import { AiSafetyNotice } from '../../src/components/AiSafetyNotice';
 
 interface AiSummary {
   available: boolean;
@@ -41,6 +42,7 @@ export function PomoshchnikClient() {
   const [answer, setAnswer] = useState('');
   const [requestLoading, setRequestLoading] = useState(false);
   const [error, setError] = useState('');
+  const [aiRulesAccepted, setAiRulesAccepted] = useState(false);
 
   useEffect(() => {
     if (!isAuthenticated) return;
@@ -77,6 +79,10 @@ export function PomoshchnikClient() {
   async function handleSubmit(event: React.FormEvent<HTMLFormElement>) {
     event.preventDefault();
     if (!canUseAssistant || requestLoading) return;
+    if (!aiRulesAccepted) {
+      setError('Подтвердите правила безопасного использования AI-помощника перед отправкой запроса.');
+      return;
+    }
 
     setRequestLoading(true);
     setError('');
@@ -87,7 +93,7 @@ export function PomoshchnikClient() {
         method: 'POST',
         credentials: 'include',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ message }),
+        body: JSON.stringify({ message, aiRulesAccepted }),
       });
 
       const data = await response.json().catch(() => ({}));
@@ -205,6 +211,18 @@ export function PomoshchnikClient() {
             </div>
           </div>
 
+          <div className="mt-6">
+            <AiSafetyNotice
+              checked={aiRulesAccepted}
+              onChange={(checked) => {
+                setAiRulesAccepted(checked);
+                if (checked && error === 'Подтвердите правила безопасного использования AI-помощника перед отправкой запроса.') {
+                  setError('');
+                }
+              }}
+            />
+          </div>
+
           {!summaryLoading && summary && !summary.subscriptionActive && (
             <div className="mt-6 rounded-2xl border border-amber-100 bg-amber-50 p-5">
               <div className="flex items-start gap-3">
@@ -246,7 +264,7 @@ export function PomoshchnikClient() {
               </div>
               <button
                 type="submit"
-                disabled={!canUseAssistant || requestLoading || message.trim().length < 10}
+                disabled={!canUseAssistant || requestLoading || !aiRulesAccepted || message.trim().length < 10}
                 className="inline-flex items-center justify-center gap-2 rounded-xl bg-emerald-500 px-5 py-3 text-sm font-semibold text-white hover:bg-emerald-600 disabled:cursor-not-allowed disabled:bg-emerald-300"
               >
                 {requestLoading ? <Loader2 className="h-4 w-4 animate-spin" /> : <Send className="h-4 w-4" />}

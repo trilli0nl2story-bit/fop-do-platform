@@ -51,6 +51,7 @@ export default async function sitemap(): Promise<MetadataRoute.Sitemap> {
     'usloviya',
     'soglasie',
     'subscription',
+    'ai-rules',
     'vozvrat',
     'avtory',
   ].map((slug) => ({

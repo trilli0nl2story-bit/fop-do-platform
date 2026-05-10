@@ -50,6 +50,13 @@ interface SubscriptionCheckoutConsentParams {
   };
 }
 
+interface AiRulesConsentParams {
+  userId: string;
+  email?: string | null;
+  sourceUrl?: string | null;
+  metadata?: Record<string, unknown>;
+}
+
 let consentsTableReady: Promise<void> | null = null;
 
 export async function ensureConsentsTable(): Promise<void> {
@@ -267,4 +274,23 @@ export async function hasSubscriptionCheckoutConsents(params: {
   const types = new Set(result.rows.map((row) => row.consent_type));
 
   return types.has('offer') && types.has('subscription') && types.has('refund');
+}
+
+export async function recordAiRulesConsent(
+  params: AiRulesConsentParams,
+  request: Request
+): Promise<void> {
+  await ensureConsentsTable();
+  await recordConsent(
+    {
+      userId: params.userId,
+      email: params.email,
+      formName: 'ai_assistant',
+      consentType: 'ai_rules',
+      documentSlug: 'ai-rules',
+      sourceUrl: params.sourceUrl,
+      metadata: params.metadata,
+    },
+    request
+  );
 }

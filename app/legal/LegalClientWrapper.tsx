@@ -13,6 +13,7 @@ import { Consent } from '../../src/views/legal/Consent';
 import { Refund } from '../../src/views/legal/Refund';
 import { Authors } from '../../src/views/legal/Authors';
 import { SubscriptionTerms } from '../../src/views/legal/SubscriptionTerms';
+import { AiRules } from '../../src/views/legal/AiRules';
 
 const VIEWS: Record<string, React.ComponentType<{ onNavigate: (p: string) => void }>> = {
   oferta: Offer,
@@ -22,6 +23,7 @@ const VIEWS: Record<string, React.ComponentType<{ onNavigate: (p: string) => voi
   vozvrat: Refund,
   avtory: Authors,
   subscription: SubscriptionTerms,
+  'ai-rules': AiRules,
 };
 
 interface LegalClientWrapperProps {

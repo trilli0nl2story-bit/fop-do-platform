@@ -35,6 +35,11 @@ export interface AssistantReplyResult {
   usage: AssistantUsageSummary;
 }
 
+type BeforeAssistantRequestParams = {
+  model: string;
+  usage: AssistantUsageSummary;
+};
+
 function getAssistantModel(): string {
   return (
     process.env.OPENAI_ASSISTANT_MODEL?.trim() ||
@@ -119,6 +124,8 @@ function buildSystemPrompt(): string {
     'Если уместно, предлагай ответ в виде коротких шагов, списка действий, структуры документа или готового черновика.',
     'Не придумывай ссылки на законы и документы, если не уверен.',
     'Если вопрос требует официальной юридической или медицинской консультации, прямо скажи об ограничении и дай осторожную практическую рекомендацию.',
+    'Не запрашивай и не обрабатывай персональные данные детей, родителей, сотрудников ДОУ и третьих лиц. Если пользователь ввел такие данные, попроси заменить их обезличенными формулировками и не повторяй эти данные в ответе.',
+    'Ответ носит справочный характер и не является юридической, медицинской, психологической или официальной методической экспертизой.',
     'Избегай воды, пиши содержательно и доброжелательно.',
   ].join(' ');
 }
@@ -227,6 +234,7 @@ async function failAiRequest(params: {
 export async function createAssistantReply(params: {
   userId: string;
   prompt: string;
+  beforeAssistantRequest: (params: BeforeAssistantRequestParams) => Promise<void>;
 }): Promise<AssistantReplyResult> {
   const usage = await getAssistantUsageSummary(params.userId);
 
@@ -243,6 +251,8 @@ export async function createAssistantReply(params: {
   }
 
   const model = getAssistantModel();
+  await params.beforeAssistantRequest({ model, usage });
+
   const requestId = await createPendingAiRequest({
     userId: params.userId,
     prompt: params.prompt,
