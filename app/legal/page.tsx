@@ -4,6 +4,7 @@ import Link from 'next/link';
 const documents = [
   { title: 'Публичная оферта', href: '/legal/oferta' },
   { title: 'Политика обработки персональных данных', href: '/legal/konfidentsialnost' },
+  { title: 'Политика cookie', href: '/legal/cookie-policy' },
   { title: 'Пользовательское соглашение', href: '/legal/usloviya' },
   { title: 'Согласие на обработку персональных данных', href: '/legal/soglasie' },
   { title: 'Согласие на рассылку', href: '/legal/marketing-consent' },

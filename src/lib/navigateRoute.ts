@@ -30,6 +30,7 @@ export function resolveRoute(page: string): string {
   if (page === 'privacy-policy') return '/legal/privacy-policy';
   if (page === 'personal-data-consent') return '/legal/personal-data-consent';
   if (page === 'marketing-consent') return '/legal/marketing-consent';
+  if (page === 'cookie-policy') return '/legal/cookie-policy';
   if (page === 'materials-hub' || page.startsWith('materials-hub/')) return '/materialy';
   if (page === 'free-materials') return '/materialy/besplatno';
   if (page === 'subscription-materials') return '/materialy/podpiska';

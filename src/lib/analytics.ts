@@ -1,3 +1,5 @@
+import { hasAnalyticsCookieConsent } from './cookieConsent';
+
 export type AnalyticsEventType =
   | 'product_view'
   | 'preview_click'
@@ -36,6 +38,10 @@ function saveEvents(events: AnalyticsEvent[]): void {
 }
 
 export function recordEvent(type: AnalyticsEventType, payload: Record<string, unknown> = {}): void {
+  if (!hasAnalyticsCookieConsent()) {
+    return;
+  }
+
   const events = loadEvents();
   const event: AnalyticsEvent = {
     id: `${Date.now()}-${Math.random().toString(36).slice(2, 7)}`,

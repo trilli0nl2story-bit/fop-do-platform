@@ -14,6 +14,7 @@ import { Refund } from '../../src/views/legal/Refund';
 import { Authors } from '../../src/views/legal/Authors';
 import { SubscriptionTerms } from '../../src/views/legal/SubscriptionTerms';
 import { AiRules } from '../../src/views/legal/AiRules';
+import { CookiePolicy } from '../../src/views/legal/CookiePolicy';
 
 const VIEWS: Record<string, React.ComponentType<{ onNavigate: (p: string) => void }>> = {
   oferta: Offer,
@@ -24,6 +25,7 @@ const VIEWS: Record<string, React.ComponentType<{ onNavigate: (p: string) => voi
   avtory: Authors,
   subscription: SubscriptionTerms,
   'ai-rules': AiRules,
+  'cookie-policy': CookiePolicy,
 };
 
 interface LegalClientWrapperProps {

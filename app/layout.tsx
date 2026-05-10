@@ -1,5 +1,6 @@
 import type { Metadata } from 'next';
 import { siteDescription, siteUrl, siteName } from '../src/lib/siteConfig';
+import { CookieConsentBanner } from '../src/components/CookieConsentBanner';
 import './globals.css';
 
 export const metadata: Metadata = {
@@ -29,7 +30,10 @@ export default function RootLayout({
 }) {
   return (
     <html lang="ru">
-      <body>{children}</body>
+      <body>
+        {children}
+        <CookieConsentBanner />
+      </body>
     </html>
   );
 }

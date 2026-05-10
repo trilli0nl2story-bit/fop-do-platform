@@ -7,6 +7,7 @@ interface FooterProps {
 const legalLinks = [
   { label: 'Публичная оферта', href: '/legal/oferta' },
   { label: 'Политика обработки персональных данных', href: '/legal/konfidentsialnost' },
+  { label: 'Политика cookie', href: '/legal/cookie-policy' },
   { label: 'Пользовательское соглашение', href: '/legal/usloviya' },
   { label: 'Согласие на обработку персональных данных', href: '/legal/soglasie' },
   { label: 'Условия подписки', href: '/legal/subscription' },

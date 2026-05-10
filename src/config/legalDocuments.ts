@@ -5,6 +5,7 @@ export type LegalDocumentSlug =
   | 'privacy-policy'
   | 'personal-data-consent'
   | 'marketing-consent'
+  | 'cookie-policy'
   | 'terms'
   | 'offer'
   | 'subscription'
@@ -46,6 +47,14 @@ export const legalDocuments: LegalDocumentConfig[] = [
     slug: 'marketing-consent',
     title: 'Согласие на рассылку',
     route: '/legal/marketing-consent',
+    version: LEGAL_DOCUMENT_VERSION,
+    updatedAt: LEGAL_DOCUMENT_UPDATED_AT,
+    documentHash: null,
+  },
+  {
+    slug: 'cookie-policy',
+    title: 'Политика cookie',
+    route: '/legal/cookie-policy',
     version: LEGAL_DOCUMENT_VERSION,
     updatedAt: LEGAL_DOCUMENT_UPDATED_AT,
     documentHash: null,
