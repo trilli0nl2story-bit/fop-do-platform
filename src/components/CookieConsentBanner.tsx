@@ -2,6 +2,7 @@
 
 import { useEffect, useState } from 'react';
 import {
+  COOKIE_CONSENT_OPEN_EVENT,
   type CookieConsentState,
   getCookieConsent,
   saveCookieConsent,
@@ -31,7 +32,19 @@ export function CookieConsentBanner() {
   const [ads, setAds] = useState(false);
 
   useEffect(() => {
-    setVisible(getCookieConsent() === null);
+    const current = getCookieConsent();
+    setVisible(current === null);
+
+    function openSettings() {
+      const latest = getCookieConsent();
+      setAnalytics(latest?.analytics ?? false);
+      setAds(latest?.ads ?? false);
+      setMode('settings');
+      setVisible(true);
+    }
+
+    window.addEventListener(COOKIE_CONSENT_OPEN_EVENT, openSettings);
+    return () => window.removeEventListener(COOKIE_CONSENT_OPEN_EVENT, openSettings);
   }, []);
 
   function applyConsent(settings: { analytics: boolean; ads: boolean }) {

@@ -1,4 +1,5 @@
 import { Mail } from 'lucide-react';
+import { CookieSettingsButton } from './CookieSettingsButton';
 
 interface FooterProps {
   onNavigate: (page: string) => void;
@@ -95,6 +96,9 @@ export function Footer({ onNavigate }: FooterProps) {
                 >
                   О проекте
                 </button>
+              </li>
+              <li>
+                <CookieSettingsButton />
               </li>
             </ul>
           </div>

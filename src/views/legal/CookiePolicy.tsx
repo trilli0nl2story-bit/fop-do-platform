@@ -1,4 +1,5 @@
 import { LegalPage } from './LegalPage';
+import { CookieSettingsButton } from '../../components/CookieSettingsButton';
 
 interface CookiePolicyProps {
   onNavigate: (page: string) => void;
@@ -22,8 +23,13 @@ export function CookiePolicy({ onNavigate }: CookiePolicyProps) {
         <li>Рекламные — могут использоваться для оценки рекламы и ретаргетинга после отдельного согласия.</li>
       </ul>
       <p>
-        Вы можете выбрать «Только необходимые» или разрешить дополнительные категории. Изменить выбор можно будет
-        после добавления центра настроек cookie в личном кабинете или через очистку данных сайта в браузере.
+        Вы можете выбрать «Только необходимые» или разрешить дополнительные категории. Изменить выбор можно в
+        любой момент через кнопку ниже или через ссылку «Настройки cookie» в футере сайта.
+      </p>
+      <p>
+        <CookieSettingsButton className="rounded-lg bg-blue-600 px-4 py-2 text-sm font-semibold text-white hover:bg-blue-700">
+          Изменить настройки cookie
+        </CookieSettingsButton>
       </p>
       <p>
         Финальный юридический текст политики cookie должен быть проверен владельцем проекта и юристом перед

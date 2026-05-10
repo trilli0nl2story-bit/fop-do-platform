@@ -1,5 +1,6 @@
 export const COOKIE_CONSENT_VERSION = '2026-05';
 export const COOKIE_CONSENT_STORAGE_KEY = 'dnl_cookie_consent';
+export const COOKIE_CONSENT_OPEN_EVENT = 'dnl-cookie-consent-open';
 
 export interface CookieConsentState {
   necessary: true;
@@ -64,4 +65,12 @@ export function saveCookieConsent(settings: { analytics: boolean; ads: boolean }
 
 export function hasAnalyticsCookieConsent(): boolean {
   return getCookieConsent()?.analytics === true;
+}
+
+export function openCookieConsentSettings(): void {
+  if (typeof window === 'undefined') {
+    return;
+  }
+
+  window.dispatchEvent(new Event(COOKIE_CONSENT_OPEN_EVENT));
 }
