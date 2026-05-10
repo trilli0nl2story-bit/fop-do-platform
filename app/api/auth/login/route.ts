@@ -11,6 +11,7 @@ import {
   rateLimitResponse,
   requireTrustedOrigin,
 } from '@/src/server/security';
+import { ensureCoreAuthTables } from '@/src/server/coreSchema';
 
 export async function POST(req: NextRequest) {
   const originError = requireTrustedOrigin(req);
@@ -61,6 +62,8 @@ export async function POST(req: NextRequest) {
   }
 
   try {
+    await ensureCoreAuthTables();
+
     const { rows } = await query<{
       id: string;
       password_hash: string;

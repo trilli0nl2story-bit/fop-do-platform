@@ -3,6 +3,7 @@ import { SignJWT, jwtVerify } from 'jose';
 import { cookies } from 'next/headers';
 import { NextResponse } from 'next/server';
 import { query } from './db';
+import { ensureCoreAuthTables } from './coreSchema';
 
 export const SESSION_COOKIE = 'metod_session';
 const COOKIE_MAX_AGE = 30 * 24 * 60 * 60;
@@ -24,6 +25,7 @@ function getSecret(): Uint8Array {
 async function ensureSessionVersionSupport(): Promise<void> {
   if (!sessionVersionReady) {
     sessionVersionReady = (async () => {
+      await ensureCoreAuthTables();
       await query(`
         ALTER TABLE users
         ADD COLUMN IF NOT EXISTS session_version integer NOT NULL DEFAULT 1

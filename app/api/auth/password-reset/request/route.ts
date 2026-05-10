@@ -7,6 +7,7 @@ import {
   rateLimitResponse,
   requireTrustedOrigin,
 } from '@/src/server/security';
+import { ensureCoreAuthTables } from '@/src/server/coreSchema';
 
 export const dynamic = 'force-dynamic';
 
@@ -52,6 +53,8 @@ export async function POST(request: NextRequest) {
   }
 
   try {
+    await ensureCoreAuthTables();
+
     const result = await query<{ id: string; email: string }>(
       `
         SELECT id, email

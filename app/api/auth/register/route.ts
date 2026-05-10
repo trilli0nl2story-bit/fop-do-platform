@@ -16,6 +16,7 @@ import {
   rateLimitResponse,
   requireTrustedOrigin,
 } from '@/src/server/security';
+import { ensureCoreAuthTables } from '@/src/server/coreSchema';
 
 function boolFromBody(value: unknown): boolean {
   return value === true;
@@ -106,6 +107,8 @@ export async function POST(req: NextRequest) {
   }
 
   try {
+    await ensureCoreAuthTables();
+
     const { rows: existing } = await query<{ id: string }>(
       'SELECT id FROM users WHERE email = $1',
       [normalizedEmail]
