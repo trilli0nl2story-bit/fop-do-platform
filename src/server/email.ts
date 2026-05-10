@@ -12,20 +12,79 @@ export interface EmailSendResult {
   mode: 'smtp' | 'disabled';
 }
 
+export interface EmailDeliveryDiagnostics {
+  configured: boolean;
+  secure: boolean;
+  present: {
+    host: boolean;
+    port: boolean;
+    user: boolean;
+    pass: boolean;
+    from: boolean;
+  };
+  missingKeys: string[];
+  warnings: string[];
+}
+
 let transporter:
   | ReturnType<typeof nodemailer.createTransport>
   | null
   | undefined;
 
-function getSmtpConfig() {
+function hasEmailAddress(value: string): boolean {
+  return /[^\s<>@]+@[^\s<>@]+/.test(value);
+}
+
+export function getEmailDeliveryDiagnostics(): EmailDeliveryDiagnostics {
   const host = process.env.SMTP_HOST?.trim();
-  const port = Number(process.env.SMTP_PORT ?? '587');
+  const rawPort = process.env.SMTP_PORT?.trim();
+  const port = Number(rawPort);
   const user = process.env.SMTP_USER?.trim();
   const pass = process.env.SMTP_PASS?.trim();
   const from = process.env.SMTP_FROM?.trim();
   const secure = process.env.SMTP_SECURE === 'true' || port === 465;
+  const missingKeys: string[] = [];
+  const warnings: string[] = [];
 
-  if (!host || !port || !from) {
+  if (!host) missingKeys.push('SMTP_HOST');
+  if (!rawPort || !Number.isFinite(port) || port <= 0) missingKeys.push('SMTP_PORT');
+  if (!user) missingKeys.push('SMTP_USER');
+  if (!pass) missingKeys.push('SMTP_PASS');
+  if (!from) missingKeys.push('SMTP_FROM');
+  if (from && !hasEmailAddress(from)) {
+    missingKeys.push('SMTP_FROM/email');
+    warnings.push('SMTP_FROM должен быть email или строкой вида "Имя <email@domain.ru>".');
+  }
+  if (port === 465 && process.env.SMTP_SECURE !== 'true') {
+    warnings.push('Для порта 465 лучше явно задать SMTP_SECURE=true.');
+  }
+
+  return {
+    configured: missingKeys.length === 0,
+    secure,
+    present: {
+      host: Boolean(host),
+      port: Boolean(rawPort) && Number.isFinite(port) && port > 0,
+      user: Boolean(user),
+      pass: Boolean(pass),
+      from: Boolean(from),
+    },
+    missingKeys,
+    warnings,
+  };
+}
+
+function getSmtpConfig() {
+  const host = process.env.SMTP_HOST?.trim();
+  const rawPort = process.env.SMTP_PORT?.trim();
+  const port = Number(rawPort);
+  const user = process.env.SMTP_USER?.trim();
+  const pass = process.env.SMTP_PASS?.trim();
+  const from = process.env.SMTP_FROM?.trim();
+  const secure = process.env.SMTP_SECURE === 'true' || port === 465;
+  const diagnostics = getEmailDeliveryDiagnostics();
+
+  if (!diagnostics.configured || !host || !rawPort || !port || !user || !pass || !from) {
     return null;
   }
 
@@ -34,7 +93,7 @@ function getSmtpConfig() {
     port,
     secure,
     from,
-    auth: user && pass ? { user, pass } : undefined,
+    auth: { user, pass },
   };
 }
 

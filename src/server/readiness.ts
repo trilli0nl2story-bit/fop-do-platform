@@ -1,5 +1,5 @@
 import { ping } from './db';
-import { isEmailDeliveryConfigured } from './email';
+import { getEmailDeliveryDiagnostics, isEmailDeliveryConfigured } from './email';
 import { isProdamusConfigured } from './prodamus';
 import { isStorageConfigured } from './storage';
 import { isAssistantConfigured } from './aiAssistant';
@@ -79,6 +79,7 @@ export async function getReleaseReadinessSummary(): Promise<ReadinessSummary> {
   const sessionSecretConfigured = hasSessionSecret();
   const prodamusConfigured = isProdamusConfigured();
   const smtpConfigured = isEmailDeliveryConfigured();
+  const smtpDiagnostics = getEmailDeliveryDiagnostics();
   const storageConfigured = isStorageConfigured();
   const openAiConfigured = isAssistantConfigured();
   const legalRequisitesConfigured = hasCompleteLegalRequisites();
@@ -146,7 +147,9 @@ export async function getReleaseReadinessSummary(): Promise<ReadinessSummary> {
       required: true,
       message: smtpConfigured
         ? 'Почта для подтверждений и восстановления пароля настроена.'
-        : 'SMTP ещё не подключён.',
+        : smtpDiagnostics.missingKeys.length
+          ? `SMTP ещё не подключён. Не хватает: ${smtpDiagnostics.missingKeys.join(', ')}.`
+          : 'SMTP ещё не подключён.',
     },
     {
       key: 'storage',
