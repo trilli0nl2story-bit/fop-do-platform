@@ -5,12 +5,12 @@ interface FooterProps {
 }
 
 const legalLinks = [
-  { label: 'Публичная оферта', page: 'offer' },
-  { label: 'Политика обработки персональных данных', page: 'privacy' },
-  { label: 'Пользовательское соглашение', page: 'terms' },
-  { label: 'Согласие на обработку персональных данных', page: 'consent' },
-  { label: 'Оплата и возврат', page: 'refund' },
-  { label: 'Для авторов', page: 'authors' },
+  { label: 'Публичная оферта', href: '/legal/oferta' },
+  { label: 'Политика обработки персональных данных', href: '/legal/konfidentsialnost' },
+  { label: 'Пользовательское соглашение', href: '/legal/usloviya' },
+  { label: 'Согласие на обработку персональных данных', href: '/legal/soglasie' },
+  { label: 'Оплата и возврат', href: '/legal/vozvrat' },
+  { label: 'Для авторов', href: '/legal/avtory' },
 ];
 
 export function Footer({ onNavigate }: FooterProps) {
@@ -36,13 +36,13 @@ export function Footer({ onNavigate }: FooterProps) {
             <h3 className="text-white font-semibold text-sm mb-4">Документы</h3>
             <ul className="space-y-2">
               {legalLinks.map(link => (
-                <li key={link.page}>
-                  <button
-                    onClick={() => onNavigate(link.page)}
+                <li key={link.href}>
+                  <a
+                    href={link.href}
                     className="text-sm text-gray-400 hover:text-white transition-colors text-left"
                   >
                     {link.label}
-                  </button>
+                  </a>
                 </li>
               ))}
             </ul>

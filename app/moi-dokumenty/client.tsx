@@ -151,7 +151,7 @@ export function MoiDokumentyClient() {
   return (
     <CartProvider>
       <PostPurchaseDiscountProvider>
-        <Header currentPage="my-documents" onNavigate={onNavigate} isAuthenticated={isAuthenticated} />
+        <Header currentPage="my-materials" onNavigate={onNavigate} isAuthenticated={isAuthenticated} />
         <main className="min-h-screen bg-gray-50">
           <div className="mx-auto max-w-5xl px-4 py-8 sm:px-6">
             <div className="mb-6">

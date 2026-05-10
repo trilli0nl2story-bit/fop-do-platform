@@ -5,9 +5,10 @@ interface ConsentCheckboxProps {
 }
 
 export function ConsentCheckbox({ checked, onChange, onNavigate }: ConsentCheckboxProps) {
-  const handleLink = (page: string) => (e: React.MouseEvent) => {
-    e.preventDefault();
-    onNavigate?.(page);
+  const handleLink = (page: string) => (event: React.MouseEvent<HTMLAnchorElement>) => {
+    if (!onNavigate) return;
+    event.preventDefault();
+    onNavigate(page);
   };
 
   return (
@@ -36,39 +37,29 @@ export function ConsentCheckbox({ checked, onChange, onNavigate }: ConsentCheckb
       </div>
       <span className="text-sm text-gray-600 leading-relaxed">
         Я принимаю условия{' '}
-        {onNavigate ? (
-          <button
-            type="button"
-            onClick={handleLink('terms')}
-            className="text-blue-500 hover:underline"
-          >
-            пользовательского соглашения
-          </button>
-        ) : (
-          <span className="text-blue-500">пользовательского соглашения</span>
-        )}{' '}
+        <a
+          href="/legal/usloviya"
+          onClick={handleLink('terms')}
+          className="text-blue-500 hover:underline"
+        >
+          пользовательского соглашения
+        </a>{' '}
         и согласен на обработку персональных данных в соответствии с{' '}
-        {onNavigate ? (
-          <>
-            <button
-              type="button"
-              onClick={handleLink('privacy')}
-              className="text-blue-500 hover:underline"
-            >
-              политикой
-            </button>{' '}
-            и{' '}
-            <button
-              type="button"
-              onClick={handleLink('consent')}
-              className="text-blue-500 hover:underline"
-            >
-              согласием на обработку данных
-            </button>
-          </>
-        ) : (
-          <span className="text-blue-500">политикой конфиденциальности</span>
-        )}
+        <a
+          href="/legal/konfidentsialnost"
+          onClick={handleLink('privacy')}
+          className="text-blue-500 hover:underline"
+        >
+          политикой
+        </a>{' '}
+        и{' '}
+        <a
+          href="/legal/soglasie"
+          onClick={handleLink('consent')}
+          className="text-blue-500 hover:underline"
+        >
+          согласием на обработку данных
+        </a>
         .
       </span>
     </label>

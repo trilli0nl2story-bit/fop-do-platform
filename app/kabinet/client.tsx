@@ -104,6 +104,10 @@ interface UserOrderDetail {
   }>;
 }
 
+interface KabinetClientProps {
+  section?: 'dashboard' | 'profile';
+}
+
 const SUBSCRIPTION_LABELS: Record<string, string> = {
   none: 'Подписка пока не подключена',
   expired: 'Подписка истекла',
@@ -145,7 +149,7 @@ function formatDate(iso: string) {
   return new Date(iso).toLocaleDateString('ru-RU', { day: 'numeric', month: 'long', year: 'numeric' });
 }
 
-export function KabinetClient() {
+export function KabinetClient({ section = 'dashboard' }: KabinetClientProps) {
   const router = useRouter();
   const searchParams = useSearchParams();
   const { user, isAuthenticated, loading, refresh } = useAuthSession();
@@ -465,7 +469,7 @@ export function KabinetClient() {
   const orders = summary?.orders;
   const referral = summary?.referral;
   const ai = summary?.ai;
-  const isProfileSection = searchParams.get('section') === 'profile';
+  const isProfileSection = section === 'profile' || searchParams.get('section') === 'profile';
 
   // Authenticated
   return (
@@ -601,7 +605,7 @@ export function KabinetClient() {
 
             <div className="grid gap-3 sm:grid-cols-2">
               <Link
-                href="/moi-dokumenty"
+                href="/moi-materialy"
                 className="flex items-start gap-3 rounded-2xl border border-gray-200 bg-white p-5 shadow-sm transition-colors hover:border-blue-200"
               >
                 <div className="flex h-10 w-10 flex-shrink-0 items-center justify-center rounded-xl bg-blue-50 text-blue-600">

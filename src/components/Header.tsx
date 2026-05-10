@@ -9,7 +9,7 @@ interface HeaderProps {
   isAuthenticated: boolean;
 }
 
-const minimalPages = ['landing', 'login', 'register', 'offer', 'privacy', 'terms', 'consent', 'authors', 'refund'];
+const minimalPages = ['landing', 'login', 'register', 'legal', 'offer', 'privacy', 'terms', 'consent', 'authors', 'refund'];
 
 function isMinimalPage(page: string) {
   return minimalPages.includes(page) ||
@@ -33,7 +33,7 @@ export function Header({ currentPage, onNavigate, isAuthenticated }: HeaderProps
     { name: 'Главная', page: 'dashboard' },
     { name: 'Материалы', page: 'materials-hub' },
     { name: 'Помощник', page: 'assistant' },
-    { name: 'Мои документы', page: 'my-documents' },
+    { name: 'Мои материалы', page: 'my-materials' },
     { name: 'Мол. специалист', page: 'young-specialist' },
   ];
 
@@ -71,7 +71,9 @@ export function Header({ currentPage, onNavigate, isAuthenticated }: HeaderProps
                   key={item.page}
                   onClick={() => onNavigate(item.page)}
                   className={`px-3 py-1.5 rounded-lg text-sm font-medium transition-colors ${
-                    currentPage === item.page || (item.page === 'materials-hub' && ['free-materials', 'subscription-materials', 'store-materials'].includes(currentPage))
+                    currentPage === item.page ||
+                    (item.page === 'my-materials' && currentPage === 'my-documents') ||
+                    (item.page === 'materials-hub' && ['free-materials', 'subscription-materials', 'store-materials'].includes(currentPage))
                       ? 'bg-blue-50 text-blue-600'
                       : 'text-gray-600 hover:bg-gray-50'
                   }`}
@@ -100,7 +102,7 @@ export function Header({ currentPage, onNavigate, isAuthenticated }: HeaderProps
                   </button>
                 )}
                 <button
-                  onClick={() => onNavigate('my-documents')}
+                  onClick={() => onNavigate('my-materials')}
                   className="flex items-center gap-1.5 px-3 py-1.5 text-sm font-medium text-blue-600 hover:text-blue-700 hover:bg-blue-50 rounded-lg transition-colors"
                 >
                   <User className="w-4 h-4" />
@@ -176,7 +178,10 @@ export function Header({ currentPage, onNavigate, isAuthenticated }: HeaderProps
                 key={item.page}
                 onClick={() => { onNavigate(item.page); setMobileMenuOpen(false); }}
                 className={`block w-full text-left px-4 py-2.5 rounded-lg text-sm font-medium transition-colors ${
-                  currentPage === item.page ? 'bg-blue-50 text-blue-600' : 'text-gray-600 hover:bg-gray-50'
+                  currentPage === item.page ||
+                  (item.page === 'my-materials' && currentPage === 'my-documents')
+                    ? 'bg-blue-50 text-blue-600'
+                    : 'text-gray-600 hover:bg-gray-50'
                 }`}
               >
                 {item.name}

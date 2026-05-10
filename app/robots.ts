@@ -8,6 +8,9 @@ export default function robots(): MetadataRoute.Robots {
       allow: '/',
       disallow: [
         '/kabinet',
+        '/profil',
+        '/moi-materialy',
+        '/moi-dokumenty',
         '/korzina',
         '/oplata',
         '/api',

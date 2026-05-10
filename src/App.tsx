@@ -167,6 +167,7 @@ function App() {
         return <Assistant isAuthenticated={isAuthenticated} hasSubscription={false} onNavigate={handleNavigate} />;
       case 'request-document':
         return <RequestDocument onNavigate={handleNavigate} />;
+      case 'my-materials':
       case 'my-documents':
         return <MyDocuments />;
       case 'request-status':

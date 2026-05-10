@@ -48,7 +48,7 @@ export async function sendStoreOrderPaidEmail(orderId: string): Promise<void> {
 
   const origin = getAppOrigin();
   const cabinetUrl = `${origin}/kabinet`;
-  const materialsUrl = `${origin}/moi-dokumenty`;
+  const materialsUrl = `${origin}/moi-materialy`;
   const totalRubles = Math.round(Number(order.total_amount ?? 0) / 100);
   const itemLines = itemsResult.rows.map((item) => `• ${item.title}`);
   const itemHtml = itemsResult.rows
