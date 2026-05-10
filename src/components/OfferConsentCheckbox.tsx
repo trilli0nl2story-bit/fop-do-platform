@@ -54,7 +54,7 @@ export function OfferConsentCheckbox({ checked, onChange, onNavigate }: OfferCon
         >
           условия возврата
         </a>
-        .
+        . Я понимаю, что после подтверждения оплаты доступ к цифровому материалу откроется в личном кабинете.
       </span>
     </label>
   );

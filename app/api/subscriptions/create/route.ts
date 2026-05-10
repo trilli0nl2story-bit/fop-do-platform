@@ -16,10 +16,14 @@ type CreateSubscriptionBody = {
     offer?: boolean;
     subscription?: boolean;
     refund?: boolean;
+    recurrent?: boolean;
   };
   offerConsent?: boolean;
   subscriptionConsent?: boolean;
   refundConsent?: boolean;
+  recurrent?: boolean;
+  recurring?: boolean;
+  recurrentConsent?: boolean;
 };
 
 function hasSubscriptionConsent(body: CreateSubscriptionBody): boolean {
@@ -27,6 +31,19 @@ function hasSubscriptionConsent(body: CreateSubscriptionBody): boolean {
   const subscription = body.consents?.subscription === true || body.subscriptionConsent === true;
   const refund = body.consents?.refund === true || body.refundConsent === true;
   return offer && subscription && refund;
+}
+
+function isRecurrentPaymentsEnabled(): boolean {
+  return process.env.PRODAMUS_RECURRENT_ENABLED === 'true';
+}
+
+function hasRequestedRecurrentPayment(body: CreateSubscriptionBody): boolean {
+  return (
+    body.recurrent === true ||
+    body.recurring === true ||
+    body.recurrentConsent === true ||
+    body.consents?.recurrent === true
+  );
 }
 
 export async function POST(request: Request) {
@@ -63,6 +80,19 @@ export async function POST(request: Request) {
       );
     }
 
+    if (hasRequestedRecurrentPayment(body)) {
+      const recurrentEnabled = isRecurrentPaymentsEnabled();
+      return NextResponse.json(
+        {
+          error: recurrentEnabled ? 'recurrent_not_implemented' : 'recurrent_disabled',
+          message: recurrentEnabled
+            ? 'Автопродление ещё не внедрено в этой версии. Сейчас доступ по подписке оформляется только разовой оплатой.'
+            : 'Автопродление пока не подключено. Сейчас доступ по подписке оформляется только разовой оплатой.',
+        },
+        { status: recurrentEnabled ? 501 : 400 }
+      );
+    }
+
     const checkout = await createSubscriptionCheckout({
       userId: sessionUser.id,
       planId: typeof body.planId === 'string' ? body.planId : '',
@@ -79,6 +109,10 @@ export async function POST(request: Request) {
               totalRubles: payment.totalRubles,
               planId: payment.planId,
               months: payment.months,
+              paymentMode: 'one_time_access_period',
+              recurrentEnabled: isRecurrentPaymentsEnabled(),
+              recurrentRequested: hasRequestedRecurrentPayment(body),
+              recurrentConsent: false,
             },
           },
           request
@@ -93,6 +127,8 @@ export async function POST(request: Request) {
       totalRubles: checkout.totalRubles,
       planId: checkout.planId,
       provider: 'prodamus',
+      paymentMode: 'one_time_access_period',
+      recurrentEnabled: isRecurrentPaymentsEnabled(),
     });
   } catch (error) {
     if (error instanceof SubscriptionCheckoutError) {

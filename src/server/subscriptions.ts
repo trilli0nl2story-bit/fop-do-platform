@@ -208,11 +208,11 @@ function buildSubscriptionPaymentUrl(params: {
     order_id: params.orderId,
     customer_email: params.customerEmail,
     customer_phone: params.customerPhone || undefined,
-    customer_extra: 'Оформление подписки на платформу',
-    payment_comment: `Подписка ${params.plan.label}`,
+    customer_extra: 'Разовая оплата доступа по подписке',
+    payment_comment: `Доступ по подписке ${params.plan.label}`,
     products: [
       {
-        name: `Подписка ${params.plan.label}`,
+        name: `Доступ по подписке ${params.plan.label}`,
         price: totalRubles,
         quantity: 1,
         sku: `subscription:${params.plan.id}`,
@@ -277,6 +277,8 @@ async function createSubscriptionRows(
       rublesToKopecks(totalRubles),
       JSON.stringify({
         kind: 'subscription',
+        paymentMode: 'one_time_access_period',
+        recurrent: false,
         planCode: plan.id,
         months: plan.months,
         discountPercent: plan.discountPercent,
