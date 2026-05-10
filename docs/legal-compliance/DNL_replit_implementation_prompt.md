@@ -65,9 +65,9 @@
 export const legalInfo = {
   projectName: 'Дошкольное на лаконичном',
   legalName: 'ИП Васильева Наталья Александровна',
-  ogrnip: '',
-  inn: '',
-  email: '',
+  ogrnip: '323784700298822',
+  inn: '781631928699',
+  email: 'official@doshkolnoe-na-lokanichnom.ru',
   correspondenceAddress: '',
   domains: ['fop-do.ru', 'фоп-до.рф'],
 } as const;
