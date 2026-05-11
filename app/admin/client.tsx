@@ -138,6 +138,7 @@ interface SmtpTransportDiagnostics {
   accepted: string[];
   rejected: string[];
   pending: string[];
+  headerFrom: string | null;
   envelopeFrom: string | null;
 }
 
@@ -427,6 +428,12 @@ function SmtpDiagnosticsPanel({ defaultEmail }: { defaultEmail: string }) {
               <div className="rounded-lg bg-white/70 px-3 py-2">
                 <span className="block text-green-500">Envelope From</span>
                 <span className="font-semibold break-all">{smtpTransport.envelopeFrom}</span>
+              </div>
+            )}
+            {smtpTransport.headerFrom && (
+              <div className="rounded-lg bg-white/70 px-3 py-2">
+                <span className="block text-green-500">Header From</span>
+                <span className="font-semibold break-all">{smtpTransport.headerFrom}</span>
               </div>
             )}
           </div>

@@ -20,6 +20,7 @@ export interface EmailTransportDiagnostics {
   accepted: string[];
   rejected: string[];
   pending: string[];
+  headerFrom: string | null;
   envelopeFrom: string | null;
 }
 
@@ -159,6 +160,20 @@ function extractEmailAddress(value: string | undefined): string | null {
   return (angleMatch?.[1] ?? plainMatch?.[0] ?? null)?.trim() ?? null;
 }
 
+function extractDisplayName(value: string | undefined): string | null {
+  if (!value) return null;
+  const match = value.match(/^\s*(.*?)\s*<[^<>]+>\s*$/);
+  if (!match) return null;
+
+  const name = match[1]
+    .trim()
+    .replace(/^["']|["']$/g, '')
+    .trim();
+
+  if (!name || name.includes('@')) return null;
+  return name;
+}
+
 function normalizeEmailDomainToAscii(email: string | null): string | null {
   if (!email) return null;
   const at = email.lastIndexOf('@');
@@ -237,15 +252,21 @@ function getSmtpConfig() {
   const user = process.env.SMTP_USER?.trim();
   const pass = process.env.SMTP_PASS?.trim();
   const from = process.env.SMTP_FROM?.trim();
+  const fromAddress = normalizeEmailDomainToAscii(
+    extractEmailAddress(from) ?? extractEmailAddress(user)
+  );
+  const fromName =
+    process.env.SMTP_FROM_NAME?.trim() ||
+    extractDisplayName(from) ||
+    'Методический кабинет педагога';
   const envelopeFrom = normalizeEmailDomainToAscii(
     extractEmailAddress(process.env.SMTP_ENVELOPE_FROM?.trim()) ??
-      extractEmailAddress(from) ??
-      extractEmailAddress(user)
+      fromAddress
   );
   const secure = process.env.SMTP_SECURE === 'true' || port === 465;
   const diagnostics = getEmailDeliveryDiagnostics();
 
-  if (!diagnostics.configured || !host || !rawPort || !port || !user || !pass || !from || !envelopeFrom) {
+  if (!diagnostics.configured || !host || !rawPort || !port || !user || !pass || !from || !fromAddress || !envelopeFrom) {
     return null;
   }
 
@@ -253,7 +274,11 @@ function getSmtpConfig() {
     host,
     port,
     secure,
-    from,
+    from: {
+      name: fromName,
+      address: fromAddress,
+    },
+    headerFrom: `${fromName} <${fromAddress}>`,
     envelopeFrom,
     auth: { user, pass },
   };
@@ -322,6 +347,7 @@ export async function sendEmail(
       accepted,
       rejected,
       pending,
+      headerFrom: config.headerFrom,
       envelopeFrom: config.envelopeFrom,
     },
   };
