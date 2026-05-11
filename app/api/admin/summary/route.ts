@@ -1,6 +1,7 @@
 import { NextResponse } from 'next/server';
 import { getCurrentUser } from '@/src/server/auth';
 import { query } from '@/src/server/db';
+import { ensureAppCoreTables } from '@/src/server/appSchema';
 
 export const dynamic = 'force-dynamic';
 
@@ -20,6 +21,7 @@ export async function GET() {
   try {
     const { error } = await requireAdmin();
     if (error) return error;
+    await ensureAppCoreTables();
 
     const [
       users,

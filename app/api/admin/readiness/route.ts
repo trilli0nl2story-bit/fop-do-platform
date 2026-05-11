@@ -1,5 +1,6 @@
 import { NextResponse } from 'next/server';
 import { getCurrentUser } from '@/src/server/auth';
+import { ensureAppCoreTables } from '@/src/server/appSchema';
 import { getReleaseReadinessSummary } from '@/src/server/readiness';
 
 export const dynamic = 'force-dynamic';
@@ -15,6 +16,7 @@ export async function GET() {
       return NextResponse.json({ error: 'Forbidden' }, { status: 403 });
     }
 
+    await ensureAppCoreTables();
     return NextResponse.json(await getReleaseReadinessSummary());
   } catch (error) {
     console.error('[api/admin/readiness]', error instanceof Error ? error.message : String(error));

@@ -4,6 +4,7 @@ import { query } from '@/src/server/db';
 import { isEmailDeliveryConfigured } from '@/src/server/email';
 import { getReferralSummary } from '@/src/server/referrals';
 import { getAssistantUsageSummary } from '@/src/server/aiAssistant';
+import { ensureAppCoreTables } from '@/src/server/appSchema';
 
 export const dynamic = 'force-dynamic';
 
@@ -15,6 +16,7 @@ export async function GET() {
     }
 
     const userId = sessionUser.id;
+    await ensureAppCoreTables();
 
     const userRes = await query<{ email_verified_at: string | null }>(
       'SELECT email_verified_at FROM users WHERE id = $1 LIMIT 1',
