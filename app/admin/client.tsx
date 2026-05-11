@@ -132,6 +132,15 @@ interface SmtpFailureDiagnostics {
   hint: string;
 }
 
+interface SmtpTransportDiagnostics {
+  messageId: string | null;
+  response: string | null;
+  accepted: string[];
+  rejected: string[];
+  pending: string[];
+  envelopeFrom: string | null;
+}
+
 const navItems: Array<{
   id: AdminSection;
   label: string;
@@ -247,6 +256,7 @@ function SmtpDiagnosticsPanel({ defaultEmail }: { defaultEmail: string }) {
   const [message, setMessage] = useState('');
   const [error, setError] = useState('');
   const [smtpError, setSmtpError] = useState<SmtpFailureDiagnostics | null>(null);
+  const [smtpTransport, setSmtpTransport] = useState<SmtpTransportDiagnostics | null>(null);
 
   useEffect(() => {
     if (!testEmail && defaultEmail) setTestEmail(defaultEmail);
@@ -257,6 +267,7 @@ function SmtpDiagnosticsPanel({ defaultEmail }: { defaultEmail: string }) {
     setError('');
     setMessage('');
     setSmtpError(null);
+    setSmtpTransport(null);
     try {
       const response = await fetch('/api/admin/email-test', { credentials: 'include' });
       const data = await response.json().catch(() => ({}));
@@ -274,6 +285,7 @@ function SmtpDiagnosticsPanel({ defaultEmail }: { defaultEmail: string }) {
     setError('');
     setMessage('');
     setSmtpError(null);
+    setSmtpTransport(null);
     try {
       const response = await fetch('/api/admin/email-test', {
         method: 'POST',
@@ -285,9 +297,11 @@ function SmtpDiagnosticsPanel({ defaultEmail }: { defaultEmail: string }) {
       if (!response.ok) {
         if (data.diagnostics) setDiagnostics(data.diagnostics);
         setSmtpError(data.smtpError ?? null);
+        setSmtpTransport(data.transport ?? null);
         throw new Error(data.message ?? data.error ?? 'Тестовое письмо не отправилось.');
       }
-      setMessage(`Тестовое письмо отправлено на ${data.to}. Проверьте входящие и спам.`);
+      setSmtpTransport(data.transport ?? null);
+      setMessage(`SMTP-сервер принял тестовое письмо для ${data.to}. Доставку в почтовый ящик проверяем отдельно.`);
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Тестовое письмо не отправилось.');
     } finally {
@@ -392,6 +406,44 @@ function SmtpDiagnosticsPanel({ defaultEmail }: { defaultEmail: string }) {
         <p className="mt-4 text-sm text-green-700 bg-green-50 border border-green-100 rounded-xl px-4 py-3">
           {message}
         </p>
+      )}
+      {smtpTransport && (
+        <div className="mt-3 rounded-xl border border-green-100 bg-green-50 px-4 py-3 text-sm text-green-800">
+          <p className="font-semibold">Ответ SMTP-сервера</p>
+          <div className="mt-2 grid grid-cols-1 sm:grid-cols-3 gap-2 text-xs">
+            {smtpTransport.messageId && (
+              <div className="rounded-lg bg-white/70 px-3 py-2">
+                <span className="block text-green-500">Message ID</span>
+                <span className="font-semibold break-all">{smtpTransport.messageId}</span>
+              </div>
+            )}
+            {(smtpTransport.accepted?.length ?? 0) > 0 && (
+              <div className="rounded-lg bg-white/70 px-3 py-2">
+                <span className="block text-green-500">Accepted</span>
+                <span className="font-semibold break-all">{smtpTransport.accepted.join(', ')}</span>
+              </div>
+            )}
+            {smtpTransport.envelopeFrom && (
+              <div className="rounded-lg bg-white/70 px-3 py-2">
+                <span className="block text-green-500">Envelope From</span>
+                <span className="font-semibold break-all">{smtpTransport.envelopeFrom}</span>
+              </div>
+            )}
+          </div>
+          {smtpTransport.response && (
+            <p className="mt-2 break-words text-xs">SMTP ответ: {smtpTransport.response}</p>
+          )}
+          {(smtpTransport.rejected?.length ?? 0) > 0 && (
+            <p className="mt-2 break-words text-xs text-red-700">
+              Rejected: {smtpTransport.rejected.join(', ')}
+            </p>
+          )}
+          {(smtpTransport.pending?.length ?? 0) > 0 && (
+            <p className="mt-2 break-words text-xs text-amber-700">
+              Pending: {smtpTransport.pending.join(', ')}
+            </p>
+          )}
+        </div>
       )}
       {error && (
         <p className="mt-4 text-sm text-red-600 bg-red-50 border border-red-100 rounded-xl px-4 py-3">

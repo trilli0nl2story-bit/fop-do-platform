@@ -99,9 +99,23 @@ export async function POST(request: Request) {
       `,
     });
 
+    if (!result.delivered) {
+      return NextResponse.json(
+        {
+          ok: false,
+          error: 'smtp_recipient_not_accepted',
+          message: 'SMTP-сервер ответил без технической ошибки, но не подтвердил принятие получателя.',
+          diagnostics: getEmailDeliveryDiagnostics(),
+          transport: result.transport,
+        },
+        { status: 502 }
+      );
+    }
+
     return NextResponse.json({
       ok: result.delivered,
       deliveryMode: result.mode,
+      transport: result.transport,
       to,
       sentAt,
     });

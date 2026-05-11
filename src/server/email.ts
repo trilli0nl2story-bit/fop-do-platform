@@ -11,6 +11,16 @@ export interface EmailPayload {
 export interface EmailSendResult {
   delivered: boolean;
   mode: 'smtp' | 'disabled';
+  transport: EmailTransportDiagnostics | null;
+}
+
+export interface EmailTransportDiagnostics {
+  messageId: string | null;
+  response: string | null;
+  accepted: string[];
+  rejected: string[];
+  pending: string[];
+  envelopeFrom: string | null;
 }
 
 export interface EmailDeliveryDiagnostics {
@@ -57,6 +67,14 @@ function asNumber(value: unknown): number | null {
     if (Number.isFinite(parsed)) return parsed;
   }
   return null;
+}
+
+function asStringArray(value: unknown): string[] {
+  if (!Array.isArray(value)) return [];
+  return value
+    .filter((item): item is string => typeof item === 'string' && item.trim().length > 0)
+    .map((item) => item.trim())
+    .slice(0, 10);
 }
 
 function escapeRegExp(value: string): string {
@@ -276,10 +294,10 @@ export async function sendEmail(
     console.warn(
       `[email] SMTP is not configured. Email to ${payload.to} was not sent. Subject: ${payload.subject}`
     );
-    return { delivered: false, mode: 'disabled' };
+    return { delivered: false, mode: 'disabled', transport: null };
   }
 
-  await smtp.sendMail({
+  const info = await smtp.sendMail({
     from: config.from,
     to: payload.to,
     envelope: {
@@ -290,6 +308,21 @@ export async function sendEmail(
     text: payload.text,
     html: payload.html,
   });
+  const infoRecord: Record<string, unknown> = isRecord(info) ? info : {};
+  const accepted = asStringArray(infoRecord.accepted);
+  const rejected = asStringArray(infoRecord.rejected);
+  const pending = asStringArray(infoRecord.pending);
 
-  return { delivered: true, mode: 'smtp' };
+  return {
+    delivered: accepted.length > 0 && rejected.length === 0,
+    mode: 'smtp',
+    transport: {
+      messageId: asString(infoRecord.messageId),
+      response: safeSmtpText(asString(infoRecord.response)),
+      accepted,
+      rejected,
+      pending,
+      envelopeFrom: config.envelopeFrom,
+    },
+  };
 }
