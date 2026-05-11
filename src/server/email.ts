@@ -26,13 +26,130 @@ export interface EmailDeliveryDiagnostics {
   warnings: string[];
 }
 
+export interface EmailFailureDiagnostics {
+  code: string | null;
+  command: string | null;
+  responseCode: number | null;
+  response: string | null;
+  hint: string;
+}
+
 let transporter:
   | ReturnType<typeof nodemailer.createTransport>
   | null
   | undefined;
 
+function isRecord(value: unknown): value is Record<string, unknown> {
+  return typeof value === 'object' && value !== null;
+}
+
+function asString(value: unknown): string | null {
+  if (typeof value !== 'string') return null;
+  const trimmed = value.trim();
+  return trimmed || null;
+}
+
+function asNumber(value: unknown): number | null {
+  if (typeof value === 'number' && Number.isFinite(value)) return value;
+  if (typeof value === 'string') {
+    const parsed = Number(value);
+    if (Number.isFinite(parsed)) return parsed;
+  }
+  return null;
+}
+
+function escapeRegExp(value: string): string {
+  return value.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+}
+
+function safeSmtpText(value: string | null): string | null {
+  if (!value) return null;
+  let safe = value.replace(/\s+/g, ' ').trim();
+  const secrets = [process.env.SMTP_PASS?.trim()].filter(
+    (secret): secret is string => Boolean(secret && secret.length >= 4)
+  );
+
+  for (const secret of secrets) {
+    safe = safe.replace(new RegExp(escapeRegExp(secret), 'g'), '[hidden]');
+  }
+
+  return safe.length > 240 ? `${safe.slice(0, 240)}...` : safe;
+}
+
+function getSmtpFailureHint({
+  code,
+  command,
+  responseCode,
+  response,
+}: {
+  code: string | null;
+  command: string | null;
+  responseCode: number | null;
+  response: string | null;
+}) {
+  const normalized = `${code ?? ''} ${command ?? ''} ${responseCode ?? ''} ${response ?? ''}`.toLowerCase();
+
+  if (
+    code === 'EAUTH' ||
+    responseCode === 534 ||
+    responseCode === 535 ||
+    normalized.includes('auth') ||
+    normalized.includes('authentication') ||
+    normalized.includes('login') ||
+    normalized.includes('password')
+  ) {
+    return 'Проверьте SMTP_USER и SMTP_PASS: для Яндекса нужен пароль приложения именно от этого ящика, а не обычный пароль аккаунта.';
+  }
+
+  if (
+    command === 'MAIL' ||
+    responseCode === 550 ||
+    responseCode === 551 ||
+    responseCode === 553 ||
+    responseCode === 554 ||
+    normalized.includes('sender') ||
+    normalized.includes('from') ||
+    normalized.includes('relay')
+  ) {
+    return 'Проверьте SMTP_FROM: адрес отправителя должен совпадать с SMTP_USER или быть разрешённым алиасом этого домена.';
+  }
+
+  if (
+    code === 'ESOCKET' ||
+    code === 'ECONNECTION' ||
+    code === 'ETIMEDOUT' ||
+    normalized.includes('certificate') ||
+    normalized.includes('timeout') ||
+    normalized.includes('ssl') ||
+    normalized.includes('tls')
+  ) {
+    return 'Проверьте SMTP_HOST, SMTP_PORT и SMTP_SECURE. Для порта 465 задайте SMTP_SECURE=true отдельным секретом.';
+  }
+
+  return 'Откройте логи Replit и сравните код/ответ SMTP. Секреты не выводятся, но код ошибки обычно показывает, что именно отклонил почтовый сервер.';
+}
+
 function hasEmailAddress(value: string): boolean {
   return /[^\s<>@]+@[^\s<>@]+/.test(value);
+}
+
+export function getEmailFailureDiagnostics(error: unknown): EmailFailureDiagnostics {
+  const record = isRecord(error) ? error : {};
+  const code = asString(record.code);
+  const command = asString(record.command);
+  const responseCode = asNumber(record.responseCode);
+  const response = safeSmtpText(
+    asString(record.response) ??
+      (error instanceof Error ? error.message : asString(record.message))
+  );
+
+  return {
+    code,
+    command,
+    responseCode,
+    response,
+    hint: getSmtpFailureHint({ code, command, responseCode, response }),
+  };
 }
 
 export function getEmailDeliveryDiagnostics(): EmailDeliveryDiagnostics {

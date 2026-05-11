@@ -1,6 +1,10 @@
 import { NextResponse } from 'next/server';
 import { getCurrentUser } from '@/src/server/auth';
-import { getEmailDeliveryDiagnostics, sendEmail } from '@/src/server/email';
+import {
+  getEmailDeliveryDiagnostics,
+  getEmailFailureDiagnostics,
+  sendEmail,
+} from '@/src/server/email';
 import {
   consumeRequestRateLimit,
   rateLimitResponse,
@@ -102,13 +106,15 @@ export async function POST(request: Request) {
       sentAt,
     });
   } catch (error) {
-    console.error('[api/admin/email-test][POST]', error instanceof Error ? error.message : String(error));
+    const smtpError = getEmailFailureDiagnostics(error);
+    console.error('[api/admin/email-test][POST]', smtpError);
     return NextResponse.json(
       {
         ok: false,
         error: 'smtp_send_failed',
         message: 'SMTP настроен, но тестовое письмо не отправилось. Проверьте пароль приложения, FROM-адрес и права ящика.',
         diagnostics: getEmailDeliveryDiagnostics(),
+        smtpError,
       },
       { status: 502 }
     );

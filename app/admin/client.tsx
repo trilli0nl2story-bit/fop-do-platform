@@ -124,6 +124,14 @@ interface SmtpDiagnostics {
   warnings: string[];
 }
 
+interface SmtpFailureDiagnostics {
+  code: string | null;
+  command: string | null;
+  responseCode: number | null;
+  response: string | null;
+  hint: string;
+}
+
 const navItems: Array<{
   id: AdminSection;
   label: string;
@@ -238,6 +246,7 @@ function SmtpDiagnosticsPanel({ defaultEmail }: { defaultEmail: string }) {
   const [sending, setSending] = useState(false);
   const [message, setMessage] = useState('');
   const [error, setError] = useState('');
+  const [smtpError, setSmtpError] = useState<SmtpFailureDiagnostics | null>(null);
 
   useEffect(() => {
     if (!testEmail && defaultEmail) setTestEmail(defaultEmail);
@@ -247,6 +256,7 @@ function SmtpDiagnosticsPanel({ defaultEmail }: { defaultEmail: string }) {
     setLoading(true);
     setError('');
     setMessage('');
+    setSmtpError(null);
     try {
       const response = await fetch('/api/admin/email-test', { credentials: 'include' });
       const data = await response.json().catch(() => ({}));
@@ -263,6 +273,7 @@ function SmtpDiagnosticsPanel({ defaultEmail }: { defaultEmail: string }) {
     setSending(true);
     setError('');
     setMessage('');
+    setSmtpError(null);
     try {
       const response = await fetch('/api/admin/email-test', {
         method: 'POST',
@@ -273,6 +284,7 @@ function SmtpDiagnosticsPanel({ defaultEmail }: { defaultEmail: string }) {
       const data = await response.json().catch(() => ({}));
       if (!response.ok) {
         if (data.diagnostics) setDiagnostics(data.diagnostics);
+        setSmtpError(data.smtpError ?? null);
         throw new Error(data.message ?? data.error ?? 'Тестовое письмо не отправилось.');
       }
       setMessage(`Тестовое письмо отправлено на ${data.to}. Проверьте входящие и спам.`);
@@ -385,6 +397,37 @@ function SmtpDiagnosticsPanel({ defaultEmail }: { defaultEmail: string }) {
         <p className="mt-4 text-sm text-red-600 bg-red-50 border border-red-100 rounded-xl px-4 py-3">
           {error}
         </p>
+      )}
+      {smtpError && (
+        <div className="mt-3 rounded-xl border border-red-100 bg-red-50 px-4 py-3 text-sm text-red-700">
+          <p className="font-semibold text-red-800">Детали SMTP без секретов</p>
+          <div className="mt-2 grid grid-cols-1 sm:grid-cols-3 gap-2 text-xs">
+            {smtpError.code && (
+              <div className="rounded-lg bg-white/70 px-3 py-2">
+                <span className="block text-red-400">Код</span>
+                <span className="font-semibold">{smtpError.code}</span>
+              </div>
+            )}
+            {smtpError.command && (
+              <div className="rounded-lg bg-white/70 px-3 py-2">
+                <span className="block text-red-400">Команда</span>
+                <span className="font-semibold">{smtpError.command}</span>
+              </div>
+            )}
+            {smtpError.responseCode && (
+              <div className="rounded-lg bg-white/70 px-3 py-2">
+                <span className="block text-red-400">Ответ</span>
+                <span className="font-semibold">{smtpError.responseCode}</span>
+              </div>
+            )}
+          </div>
+          {smtpError.response && (
+            <p className="mt-2 break-words text-xs">
+              SMTP ответ: {smtpError.response}
+            </p>
+          )}
+          <p className="mt-2 text-sm">{smtpError.hint}</p>
+        </div>
       )}
     </section>
   );
