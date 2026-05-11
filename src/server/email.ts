@@ -1,3 +1,4 @@
+import { domainToASCII } from 'node:url';
 import nodemailer from 'nodemailer';
 
 export interface EmailPayload {
@@ -133,6 +134,26 @@ function hasEmailAddress(value: string): boolean {
   return /[^\s<>@]+@[^\s<>@]+/.test(value);
 }
 
+function extractEmailAddress(value: string | undefined): string | null {
+  if (!value) return null;
+  const angleMatch = value.match(/<\s*([^<>\s]+@[^<>\s]+)\s*>/);
+  const plainMatch = value.match(/[^\s<>]+@[^\s<>]+/);
+  return (angleMatch?.[1] ?? plainMatch?.[0] ?? null)?.trim() ?? null;
+}
+
+function normalizeEmailDomainToAscii(email: string | null): string | null {
+  if (!email) return null;
+  const at = email.lastIndexOf('@');
+  if (at <= 0 || at === email.length - 1) return null;
+
+  const local = email.slice(0, at);
+  const domain = email.slice(at + 1);
+  const asciiDomain = domainToASCII(domain);
+
+  if (!local || !asciiDomain) return null;
+  return `${local}@${asciiDomain}`;
+}
+
 export function getEmailFailureDiagnostics(error: unknown): EmailFailureDiagnostics {
   const record = isRecord(error) ? error : {};
   const code = asString(record.code);
@@ -198,10 +219,15 @@ function getSmtpConfig() {
   const user = process.env.SMTP_USER?.trim();
   const pass = process.env.SMTP_PASS?.trim();
   const from = process.env.SMTP_FROM?.trim();
+  const envelopeFrom = normalizeEmailDomainToAscii(
+    extractEmailAddress(process.env.SMTP_ENVELOPE_FROM?.trim()) ??
+      extractEmailAddress(from) ??
+      extractEmailAddress(user)
+  );
   const secure = process.env.SMTP_SECURE === 'true' || port === 465;
   const diagnostics = getEmailDeliveryDiagnostics();
 
-  if (!diagnostics.configured || !host || !rawPort || !port || !user || !pass || !from) {
+  if (!diagnostics.configured || !host || !rawPort || !port || !user || !pass || !from || !envelopeFrom) {
     return null;
   }
 
@@ -210,6 +236,7 @@ function getSmtpConfig() {
     port,
     secure,
     from,
+    envelopeFrom,
     auth: { user, pass },
   };
 }
@@ -255,6 +282,10 @@ export async function sendEmail(
   await smtp.sendMail({
     from: config.from,
     to: payload.to,
+    envelope: {
+      from: config.envelopeFrom,
+      to: payload.to,
+    },
     subject: payload.subject,
     text: payload.text,
     html: payload.html,
