@@ -1,5 +1,6 @@
 import { ping } from './db';
 import { getEmailDeliveryDiagnostics, isEmailDeliveryConfigured } from './email';
+import { getEmailDomainReadiness } from './emailDomainReadiness';
 import { isProdamusConfigured } from './prodamus';
 import { isStorageConfigured } from './storage';
 import { isAssistantConfigured } from './aiAssistant';
@@ -80,6 +81,7 @@ export async function getReleaseReadinessSummary(): Promise<ReadinessSummary> {
   const prodamusConfigured = isProdamusConfigured();
   const smtpConfigured = isEmailDeliveryConfigured();
   const smtpDiagnostics = getEmailDeliveryDiagnostics();
+  const emailDomainReadiness = await getEmailDomainReadiness();
   const storageConfigured = isStorageConfigured();
   const openAiConfigured = isAssistantConfigured();
   const legalRequisitesConfigured = hasCompleteLegalRequisites();
@@ -150,6 +152,13 @@ export async function getReleaseReadinessSummary(): Promise<ReadinessSummary> {
         : smtpDiagnostics.missingKeys.length
           ? `SMTP ещё не подключён. Не хватает: ${smtpDiagnostics.missingKeys.join(', ')}.`
           : 'SMTP ещё не подключён.',
+    },
+    {
+      key: 'email_domain_dns',
+      label: 'Почтовый домен',
+      configured: emailDomainReadiness.configured,
+      required: true,
+      message: emailDomainReadiness.message,
     },
     {
       key: 'storage',
